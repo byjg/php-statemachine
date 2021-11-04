@@ -72,7 +72,7 @@ $stateMachine->canTransition($stC, $stD); //returns false
 ## Using the Auto Transition
 
 Another feature of this component is that depending on the state you are in and the 
-data you pass to the state machine, it can decide what the next you can be.
+data you pass to the state machine, it can decide what is the next state you can be.
 
 Let's analyze the following states.
 
