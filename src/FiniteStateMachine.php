@@ -8,6 +8,8 @@ class FiniteStateMachine
 {
     protected $transitionList = [];
 
+    protected $stateList = [];
+
     protected $throwError = false;
 
     public static function createMachine()
@@ -29,26 +31,33 @@ class FiniteStateMachine
     public function addTransition(Transition $transition)
     {
         $this->transitionList[$this->getKey($transition->getCurrentState(), $transition->getDesiredState())] = $transition;
+
+        if (!isset($this->stateList[$transition->getCurrentState()->getState()])) {
+            $this->stateList[$transition->getCurrentState()->getState()] = $transition->getCurrentState();
+        }
+        if (!isset($this->stateList[$transition->getDesiredState()->getState()])) {
+            $this->stateList[$transition->getDesiredState()->getState()] = $transition->getDesiredState();
+        }
         return $this;
     }
 
-    public function getNextStates(State $currentState)
+    /**
+     * @param Transition[] $transitions
+     * @return $this
+     */
+    public function addTransitions($transitions)
+    {
+        foreach ($transitions as $transition) {
+            $this->addTransition($transition);
+        }
+        return $this;
+    }
+
+    public function possibleTransitions(State $currentState)
     {
         $next = array_map(function ($key, $value) use ($currentState) {
             if (strpos($key, "${currentState}___") === 0) {
-                return $value->getDesiredState();
-            }
-            return null;
-        }, array_keys($this->transitionList), array_values($this->transitionList));
-
-        return array_filter($next);
-    }
-
-    public function getPreviousStates(State $currentState)
-    {
-        $next = array_map(function ($key, $value) use ($currentState) {
-            if (strpos($key, "___${currentState}") !== false) {
-                return $value->getCurrentState();
+                return $value;
             }
             return null;
         }, array_keys($this->transitionList), array_values($this->transitionList));
@@ -60,6 +69,23 @@ class FiniteStateMachine
     {
         if (isset($this->transitionList[$this->getKey($currentState, $desiredState)])) {
             return $this->transitionList[$this->getKey($currentState, $desiredState)];
+        }
+
+        return null;
+    }
+
+    public function autoTransitionFrom(State $currentState, $data)
+    {
+        $transitions = $this->possibleTransitions($currentState);
+
+        foreach ($transitions as $transition) {
+            if ($transition->runTransitionFunction($data)) {
+                return $transition->getDesiredState();
+            }
+        }
+
+        if ($this->throwError) {
+            throw new TransitionException("There is not possible transitions from ${currentState} with the data provided");
         }
 
         return null;
@@ -90,4 +116,15 @@ class FiniteStateMachine
         return $transition->runTransitionFunction($data);
     }
 
+    /**
+     * @param string $state
+     */
+    public function stateFactory($state)
+    {
+        if (isset($this->stateList[strtoupper($state)])) {
+            return $this->stateList[strtoupper($state)];
+        }
+
+        return null;
+    }
 }

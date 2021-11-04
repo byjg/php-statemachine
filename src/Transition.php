@@ -24,13 +24,39 @@ class Transition
     /**
      * @param State $currentState
      * @param State $desiredState
-     * @param Closure $transitionFunction
+     * @param Closure|null $transitionFunction
      */
     public function __construct(State $currentState, State $desiredState, Closure $transitionFunction = null)
     {
         $this->currentState = $currentState;
         $this->desiredState = $desiredState;
         $this->transitionFunction = $transitionFunction;
+    }
+
+    /**
+     * @param State $currentState
+     * @param State $desiredState
+     * @param Closure|null $transitionFunction
+     * @return Transition
+     */
+    public static function create(State $currentState, State $desiredState, Closure $transitionFunction = null)
+    {
+        return new Transition($currentState, $desiredState, $transitionFunction);
+    }
+
+    /**
+     * @param State[] $currentState
+     * @param State $desiredState
+     * @param Closure|null $transitionFunction
+     * @return Transition[]
+     */
+    public static function createMultiple($currentState, State $desiredState, Closure $transitionFunction = null)
+    {
+        $result = [];
+        foreach ($currentState as $from) {
+            $result[] = new Transition($from, $desiredState, $transitionFunction);
+        }
+        return $result;
     }
 
     /**
@@ -49,6 +75,10 @@ class Transition
         return $this->desiredState;
     }
 
+    /**
+     * @param $data
+     * @return bool|mixed
+     */
     public function runTransitionFunction($data)
     {
         if (!empty($this->transitionFunction)) {
