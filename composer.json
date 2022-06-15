@@ -1,12 +1,6 @@
 {
   "name": "byjg/statemachine",
   "description": "Create a simple state machine",
-  "authors": [
-    {
-      "name": "jg",
-      "email": "joao@byjg.com.br"
-    }
-  ],
   "require": {},
   "autoload": {
     "psr-4": {
