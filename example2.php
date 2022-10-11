@@ -6,15 +6,15 @@ use ByJG\StateMachine\Transition;
 
 require __DIR__ . "/vendor/autoload.php";
 
-$stInitial = new State("__VOID__");
-$stInStock = new State("IN_STOCK");
-$stLastUnits = new State("LAST_UNITS");
-$stOutOfStock = new State("OUT_OF_STOCK");
+$stInitial = new State("__VOID__", function ($data) { echo "Void state - " . print_r($data, true); });
+$stInStock = new State("IN_STOCK", function ($data) { echo "In stock - " . print_r($data, true); });
+$stLastUnits = new State("LAST_UNITS", function ($data) { echo "Last Units - " . print_r($data, true); });
+$stOutOfStock = new State("OUT_OF_STOCK", function ($data) { echo "out of Stock - " . print_r($data, true); });
 // ----
-$stNotRequested = new State("NOT_REQUESTED");
-$stRequested = new State("REQUESTED_RESUPPLY");
-$stResupplied = new State("RESUPPLIED");
-$stUnavailable = new State("UNAVAILABLE");
+$stNotRequested = new State("NOT_REQUESTED", function ($data) { echo "Not Requested - " . print_r($data, true); });
+$stRequested = new State("REQUESTED_RESUPPLY", function ($data) { echo "Requested Supply - " . print_r($data, true); });
+$stResupplied = new State("RESUPPLIED", function ($data) { echo "Ressuoplied - " . print_r($data, true); });
+$stUnavailable = new State("UNAVAILABLE", function ($data) { echo "Unavailable - " . print_r($data, true); });
 
 $transitionInStock = Transition::create($stInitial, $stInStock, function ($data) {
     return $data["qty"] >= $data["min_stock"];
@@ -34,9 +34,9 @@ $stateMachine = FiniteStateMachine::createMachine()
 
 
 echo "\n\nTransitions\n";
-var_dump($stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20]));
-var_dump($stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20]));
-var_dump($stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20]));
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])->process();
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])->process();
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])->process();
 
 
 $transitionNotRequested = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stNotRequested, function ($data) {
@@ -64,10 +64,10 @@ $secondMachine = FiniteStateMachine::createMachine()
 
 echo "\n\nTransitions 2\n";
 var_dump($secondMachine->autoTransitionFrom($stInStock, []));
-var_dump($secondMachine->autoTransitionFrom($stLastUnits, []));
-var_dump($secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10]));
-var_dump($secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50]));
-var_dump($secondMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"]));
+$secondMachine->autoTransitionFrom($stLastUnits, [])->process();
+$secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])->process();
+$secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])->process();
+$secondMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->process();
 
 echo "\n\nGet state\n";
 var_dump($secondMachine->stateFactory('NOT_REQUESTED'));

@@ -70,9 +70,12 @@ class Transition
     /**
      * @return State
      */
-    public function getDesiredState()
+    public function getDesiredState($data = null)
     {
-        return $this->desiredState;
+        $desiredState = clone $this->desiredState;
+        $desiredState->setData($data);
+
+        return $desiredState;
     }
 
     /**

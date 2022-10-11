@@ -32,14 +32,9 @@ var_dump($stateMachine->canTransition($stB, $stD));
 var_dump($stateMachine->canTransition($stB, $stD, ["some_info"]));
 var_dump($stateMachine->canTransition($stC, $stD));
 
-echo "Next States\n";
-var_dump($stateMachine->getNextStates($stA));
-var_dump($stateMachine->getNextStates($stB));
-var_dump($stateMachine->getNextStates($stC));
-var_dump($stateMachine->getNextStates($stD));
+echo "Possible States\n";
+var_dump($stateMachine->possibleTransitions($stA));
+var_dump($stateMachine->possibleTransitions($stB));
+var_dump($stateMachine->possibleTransitions($stC));
+var_dump($stateMachine->possibleTransitions($stD));
 
-echo "Previous States\n";
-var_dump($stateMachine->getPreviousStates($stA));
-var_dump($stateMachine->getPreviousStates($stB));
-var_dump($stateMachine->getPreviousStates($stC));
-var_dump($stateMachine->getPreviousStates($stD));

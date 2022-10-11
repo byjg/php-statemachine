@@ -1,0 +1,133 @@
+<?php
+
+use ByJG\StateMachine\FiniteStateMachine;
+use ByJG\StateMachine\State;
+use ByJG\StateMachine\Transition;
+use PHPUnit\Framework\TestCase;
+
+require_once "vendor/autoload.php";
+
+class FiniteStateMachineTest extends TestCase
+{
+    public function testCanTransition()
+    {
+        $stA = new State("A");
+        $stB = new State("B");
+        $stC = new State("C");
+        $stD = new State("D");
+        
+        $transitionA_B = new Transition($stA, $stB);
+        $transitionA_C = new Transition($stA, $stC);
+        $transitionB_D = new Transition($stB, $stD, function($data) {
+            return !is_null($data);
+        });
+        
+        $stateMachine = FiniteStateMachine::createMachine()
+        //    ->throwErrorIfCannotTransition()
+            ->addTransition($transitionA_B)
+            ->addTransitions([$transitionA_C, $transitionB_D]);
+        
+        $this->assertTrue($stateMachine->canTransition($stA, $stB));
+        $this->assertTrue($stateMachine->canTransition($stA, $stC));
+        $this->assertFalse($stateMachine->canTransition($stA, $stD));
+        $this->assertFalse($stateMachine->canTransition($stB, $stA));
+        $this->assertFalse($stateMachine->canTransition($stB, $stD));
+        $this->assertTrue($stateMachine->canTransition($stB, $stD, ["some_info"]));
+        $this->assertFalse($stateMachine->canTransition($stC, $stD));
+
+        $this->assertEquals([$transitionA_B, $transitionA_C], $stateMachine->possibleTransitions($stA));
+        $this->assertEquals([$transitionB_D], $stateMachine->possibleTransitions($stB));
+        $this->assertEquals([], $stateMachine->possibleTransitions($stC));
+        $this->assertEquals([], $stateMachine->possibleTransitions($stD));
+
+        $this->assertEquals($transitionB_D, $stateMachine->getTransition($stB, $stD));
+        $this->assertNull($stateMachine->getTransition($stB, $stC));
+    }
+
+    public function testAutoTransition()
+    {
+        $stInitial = new State("__VOID__");
+        $stInStock = new State("IN_STOCK");
+        $stLastUnits = new State("LAST_UNITS");
+        $stOutOfStock = new State("OUT_OF_STOCK");
+
+        $transitionInStock = Transition::create($stInitial, $stInStock, function ($data) {
+            return $data["qty"] >= $data["min_stock"];
+        });
+        
+        $transitionLastUnits = Transition::create($stInitial, $stLastUnits, function ($data) {
+            return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
+        });
+        $transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, function($data) {
+            return $data["qty"] == 0;
+        });
+        
+        $stateMachine = FiniteStateMachine::createMachine()
+            ->addTransition($transitionInStock)
+            ->addTransition($transitionLastUnits)
+            ->addTransition($transitionOutOfStock);
+
+        $this->assertEquals(
+            $stLastUnits->getState(),
+            $stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])->getState()
+        );
+        $this->assertEquals(
+            $stInStock->getState(),
+            $stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])->getState()
+        );
+        $this->assertEquals(
+            $stOutOfStock->getState(),
+            $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])->getState()
+        );
+    }
+
+    public function testAutoTransition_2()
+    {
+        $stLastUnits = new State("LAST_UNITS");
+        $stOutOfStock = new State("OUT_OF_STOCK");
+
+        $stNotRequested = new State("NOT_REQUESTED");
+        $stRequested = new State("REQUESTED_RESUPPLY");
+        $stResupplied = new State("RESUPPLIED");
+        $stUnavailable = new State("UNAVAILABLE");
+
+        $transitionNotRequested = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stNotRequested, function ($data) {
+            return !isset($data["invoice_number"]) && !isset($data["status"]);
+        });
+        
+        $transitionRequested = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stRequested, function ($data) {
+            return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
+        });
+        
+        $transitionResupplied = Transition::createMultiple([$stLastUnits, $stOutOfStock, $stRequested], $stResupplied, function ($data) {
+            return isset($data["fulfilment_number"]);
+        });
+        
+        $transitionUnavailable = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stUnavailable, function ($data) {
+            return isset($data["status"]);
+        });
+        
+        $stateMachine = FiniteStateMachine::createMachine()
+            ->addTransitions($transitionNotRequested)
+            ->addTransitions($transitionRequested)
+            ->addTransitions($transitionResupplied)
+            ->addTransitions($transitionUnavailable);
+
+        $this->assertEquals(
+            $stNotRequested->getState(),
+            $stateMachine->autoTransitionFrom($stLastUnits, [])->getState()
+        );
+        $this->assertEquals(
+            $stRequested->getState(),
+            $stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])->getState()
+        );
+        $this->assertEquals(
+            $stResupplied->getState(),
+            $stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])->getState()
+        );
+        $this->assertEquals(
+            $stUnavailable->getState(),
+            $stateMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->getState()
+        );
+    }
+}

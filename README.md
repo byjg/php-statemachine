@@ -1,6 +1,10 @@
 # State Machine
 
-[![Build Status](https://travis-ci.com/byjg/statemachine.svg?branch=master)](https://travis-ci.com/byjg/statemachine)
+[![Build Status](https://github.com/byjg/statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/statemachine/actions/workflows/phpunit.yml)
+[![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
+[![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/statemachine/)
+[![GitHub license](https://img.shields.io/github/license/byjg/statemachine.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub release](https://img.shields.io/github/release/byjg/statemachine.svg)](https://github.com/byjg/statemachine/releases/)
 
 This component implements a Finite State Machine, which can define several states and group them in a collection
 of transitions (from one state to another state). In addition, each state can have a conditional allowing move to another state.
@@ -134,6 +138,24 @@ $stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20]))
 $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])); // returns OUT_OF_STOCK
 ```
 
+When auto transitioned the state object returned have the `->getData()` with the data used to validate it. 
+
+Also, it is possible create the transation with a closure to process the state. 
+
+e.g.
+
+```php
+$stN = new State('SOMESTATE', function ($data) {
+    // execute some operation with the data
+})
+
+// After run and return $stN object
+// We can do this:
+
+$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...])); 
+$resultState->process(); // This will run the closure defined with the data used to validate it. 
+```
+
 ## Other Methods
 
 ### Create multiple transactions:
@@ -163,3 +185,6 @@ $state = $stateMachine->stateFactory('OUT_OF_STOCK');
 ```
 composer require "byjg/statemachine
 ```
+
+----
+[Open source ByJG](http://opensource.byjg.com)

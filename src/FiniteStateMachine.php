@@ -62,7 +62,7 @@ class FiniteStateMachine
             return null;
         }, array_keys($this->transitionList), array_values($this->transitionList));
 
-        return array_filter($next);
+        return array_values(array_filter($next));
     }
 
     public function getTransition(State $currentState, State $desiredState)
@@ -74,13 +74,20 @@ class FiniteStateMachine
         return null;
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param State $currentState
+     * @param mixed $data
+     * @return State
+     */
     public function autoTransitionFrom(State $currentState, $data)
     {
         $transitions = $this->possibleTransitions($currentState);
 
         foreach ($transitions as $transition) {
             if ($transition->runTransitionFunction($data)) {
-                return $transition->getDesiredState();
+                return $transition->getDesiredState($data);
             }
         }
 
