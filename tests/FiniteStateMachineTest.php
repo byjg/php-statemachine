@@ -25,7 +25,18 @@ class FiniteStateMachineTest extends TestCase
             ->addTransition($transitionAB)
             ->addTransitions([$transitionAC, $transitionBD]);
 
-        $this->assertTrue($stateMachine->canTransition($stA, $stB));
+        
+        $this->assertEquals($stA, $stateMachine->stateFactory('A'));
+        $this->assertEquals($stB, $stateMachine->stateFactory('B'));
+        $this->assertEquals($stC, $stateMachine->stateFactory('C'));
+        $this->assertEquals($stD, $stateMachine->stateFactory('D'));
+        $this->assertNull($stateMachine->stateFactory('NO'));
+        $this->assertEquals($stA, $stateMachine->stateFactory('a'));
+        $this->assertEquals($stB, $stateMachine->stateFactory('b'));
+        $this->assertEquals($stC, $stateMachine->stateFactory('c'));
+        $this->assertEquals($stD, $stateMachine->stateFactory('d'));
+
+        $this->assertTrue($stateMachine->canTransition($stA, $stateMachine->stateFactory('B')));
         $this->assertTrue($stateMachine->canTransition($stA, $stC));
         $this->assertFalse($stateMachine->canTransition($stA, $stD));
         $this->assertFalse($stateMachine->canTransition($stB, $stA));
@@ -40,6 +51,7 @@ class FiniteStateMachineTest extends TestCase
 
         $this->assertEquals($transitionBD, $stateMachine->getTransition($stB, $stD));
         $this->assertNull($stateMachine->getTransition($stB, $stC));
+
     }
 
     public function testAutoTransition()
@@ -76,6 +88,12 @@ class FiniteStateMachineTest extends TestCase
         $this->assertEquals(
             $stOutOfStock->getState(),
             $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])->getState()
+        );
+
+        // There is no transition from LastUnits to OutOfStock
+        $this->assertEquals(
+            null,
+            $stateMachine->autoTransitionFrom($stLastUnits, ["qty" => 00, "min_stock" => 20])
         );
     }
 
