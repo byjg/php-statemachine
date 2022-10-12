@@ -3,8 +3,6 @@
 use ByJG\StateMachine\State;
 use PHPUnit\Framework\TestCase;
 
-require_once "vendor/autoload.php";
-
 class StateTest extends TestCase
 {
 

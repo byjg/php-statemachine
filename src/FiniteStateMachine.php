@@ -30,7 +30,9 @@ class FiniteStateMachine
 
     public function addTransition(Transition $transition)
     {
-        $this->transitionList[$this->getKey($transition->getCurrentState(), $transition->getDesiredState())] = $transition;
+        $this->transitionList[
+            $this->getKey($transition->getCurrentState(), $transition->getDesiredState())
+        ] = $transition;
 
         if (!isset($this->stateList[$transition->getCurrentState()->getState()])) {
             $this->stateList[$transition->getCurrentState()->getState()] = $transition->getCurrentState();
@@ -85,6 +87,9 @@ class FiniteStateMachine
     {
         $transitions = $this->possibleTransitions($currentState);
 
+        /**
+         * @var Transition $transition
+         */
         foreach ($transitions as $transition) {
             if ($transition->runTransitionFunction($data)) {
                 return $transition->getDesiredState($data);
@@ -92,7 +97,9 @@ class FiniteStateMachine
         }
 
         if ($this->throwError) {
-            throw new TransitionException("There is not possible transitions from ${currentState} with the data provided");
+            throw new TransitionException(
+                "There is not possible transitions from ${currentState} with the data provided"
+            );
         }
 
         return null;
@@ -103,7 +110,7 @@ class FiniteStateMachine
      */
     public function canTransition(State $currentState, State $desiredState, $data = null)
     {
-        $result = $this->_canTransition($currentState, $desiredState, $data);
+        $result = $this->checkIfcanTransition($currentState, $desiredState, $data);
 
         if ($this->throwError && !$result) {
             throw new TransitionException("Cannot transition from ${currentState} to ${desiredState}");
@@ -112,7 +119,7 @@ class FiniteStateMachine
         return $result;
     }
 
-    protected function _canTransition(State $currentState, State $desiredState, $data = null)
+    protected function checkIfcanTransition(State $currentState, State $desiredState, $data = null)
     {
         $transition = $this->getTransition($currentState, $desiredState);
 

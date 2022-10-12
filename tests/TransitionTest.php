@@ -4,8 +4,6 @@ use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
 use PHPUnit\Framework\TestCase;
 
-require_once "vendor/autoload.php";
-
 class TransitionTest extends TestCase
 {
     public function testTransition()
