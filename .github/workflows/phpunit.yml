@@ -32,13 +32,12 @@ jobs:
       - run: composer install
       - run: ./vendor/bin/phpunit
 
-  # @todo reenable
-  # Documentation:
-  #   runs-on: 'ubuntu-latest'
-  #   needs: Build
-  #   if: github.ref == 'refs/heads/master'
-  #   env:
-  #     DOC_GITHUB_TOKEN: '${{ secrets.DOC_TOKEN }}'
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - run: curl https://opensource.byjg.com/add-doc.sh | bash /dev/stdin php statemachine
+  Documentation:
+    runs-on: 'ubuntu-latest'
+    needs: Build
+    if: github.ref == 'refs/heads/master'
+    env:
+      DOC_GITHUB_TOKEN: '${{ secrets.DOC_TOKEN }}'
+    steps:
+      - uses: actions/checkout@v3
+      - run: curl https://opensource.byjg.com/add-doc.sh | bash /dev/stdin php statemachine
