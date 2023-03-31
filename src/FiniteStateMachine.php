@@ -58,7 +58,7 @@ class FiniteStateMachine
     public function possibleTransitions(State $currentState)
     {
         $next = array_map(function ($key, $value) use ($currentState) {
-            if (strpos($key, "${currentState}___") === 0) {
+            if (strpos($key, "{$currentState}___") === 0) {
                 return $value;
             }
             return null;
@@ -98,7 +98,7 @@ class FiniteStateMachine
 
         if ($this->throwError) {
             throw new TransitionException(
-                "There is not possible transitions from ${currentState} with the data provided"
+                "There is not possible transitions from {$currentState} with the data provided"
             );
         }
 
@@ -110,16 +110,16 @@ class FiniteStateMachine
      */
     public function canTransition(State $currentState, State $desiredState, $data = null)
     {
-        $result = $this->checkIfcanTransition($currentState, $desiredState, $data);
+        $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
 
         if ($this->throwError && !$result) {
-            throw new TransitionException("Cannot transition from ${currentState} to ${desiredState}");
+            throw new TransitionException("Cannot transition from {$currentState} to {$desiredState}");
         }
 
         return $result;
     }
 
-    protected function checkIfcanTransition(State $currentState, State $desiredState, $data = null)
+    protected function checkIfCanTransition(State $currentState, State $desiredState, $data = null)
     {
         $transition = $this->getTransition($currentState, $desiredState);
 
@@ -140,5 +140,27 @@ class FiniteStateMachine
         }
 
         return null;
+    }
+
+    public function isInitialState(State $state)
+    {
+        foreach ($this->transitionList as $transition) {
+            if ($transition->getDesiredState() == $state) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function isFinalState(State $state)
+    {
+        foreach ($this->transitionList as $transition) {
+            if ($transition->getCurrentState() == $state) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -23,6 +23,18 @@ $stateMachine = FiniteStateMachine::createMachine()
     ->addTransition($transitionA_C)
     ->addTransition($transitionB_D);
 
+echo "Initial and Final States\n";
+var_dump($stateMachine->isInitialState($stA));
+var_dump($stateMachine->isInitialState($stB));
+var_dump($stateMachine->isInitialState($stC));
+var_dump($stateMachine->isInitialState($stD));
+var_dump($stateMachine->isFinalState($stA));
+var_dump($stateMachine->isFinalState($stB));
+var_dump($stateMachine->isFinalState($stC));
+var_dump($stateMachine->isFinalState($stD));
+
+
+
 echo "Transitions\n";
 var_dump($stateMachine->canTransition($stA, $stB));
 var_dump($stateMachine->canTransition($stA, $stC));

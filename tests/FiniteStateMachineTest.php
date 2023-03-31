@@ -52,6 +52,15 @@ class FiniteStateMachineTest extends TestCase
         $this->assertEquals($transitionBD, $stateMachine->getTransition($stB, $stD));
         $this->assertNull($stateMachine->getTransition($stB, $stC));
 
+        $this->assertTrue($stateMachine->isInitialState($stA));
+        $this->assertFalse($stateMachine->isInitialState($stB));
+        $this->assertFalse($stateMachine->isInitialState($stC));
+        $this->assertFalse($stateMachine->isInitialState($stD));
+
+        $this->assertFalse($stateMachine->isFinalState($stA));
+        $this->assertFalse($stateMachine->isFinalState($stB));
+        $this->assertTrue($stateMachine->isFinalState($stC));
+        $this->assertTrue($stateMachine->isFinalState($stD));
     }
 
     public function testAutoTransition()
