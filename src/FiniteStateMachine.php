@@ -12,9 +12,33 @@ class FiniteStateMachine
 
     protected $throwError = false;
 
-    public static function createMachine()
+    public static function createMachine($transitionList = [])
     {
-        return new FiniteStateMachine();
+        $stateList = [];
+        $stateMachine = new FiniteStateMachine();
+        foreach ($transitionList as $transition) {
+            if (isset($stateList[$transition[0]])) {
+                $st1 = $stateList[$transition[0]];
+            } else {
+                $st1 = new State($transition[0]);
+                $stateList[$transition[0]] = $st1;
+            }
+
+            if (isset($stateList[$transition[1]])) {
+                $st2 = $stateList[$transition[1]];
+            } else {
+                $st2 = new State($transition[1]);
+                $stateList[$transition[1]] = $st2;
+            }
+
+            if (isset($transition[2])) {
+                $stateMachine->addTransition(new Transition($st1, $st2, $transition[2]));
+            } else {
+                $stateMachine->addTransition(new Transition($st1, $st2));
+            }
+        }
+
+        return $stateMachine;
     }
 
     public function throwErrorIfCannotTransition()
@@ -133,7 +157,7 @@ class FiniteStateMachine
     /**
      * @param string $state
      */
-    public function stateFactory($state)
+    public function state($state)
     {
         if (isset($this->stateList[strtoupper($state)])) {
             return $this->stateList[strtoupper($state)];

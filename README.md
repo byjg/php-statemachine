@@ -83,6 +83,22 @@ $stateMachine->isFinal($stC); // returns true
 $stateMachine->isFinal($stD); // returns true
 ```
 
+### Other ways to create the State Machine
+
+Alternatively, you can create the state machine using the `createMachine` factory method with arguments as follows:
+
+```php
+$stateMachine = FiniteStateMachine::createMachine(
+    [
+        ['A', 'B'],
+        ['A', 'C'],
+        ['B', 'D', function($data) {
+            return !is_null($data);
+        }]
+    ]
+);
+```
+
 ## Using the Auto Transition
 
 Another feature of this component is that depending on the state you are in and the
@@ -187,7 +203,7 @@ $stateMachine->possibleTransitions($stA);
 
 ```php
 // Return null if doesn't exist, otherwise return the object State
-$state = $stateMachine->stateFactory('OUT_OF_STOCK');  
+$state = $stateMachine->state('OUT_OF_STOCK');  
 ```
 
 ## Install

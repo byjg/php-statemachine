@@ -70,4 +70,4 @@ $secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfi
 $secondMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->process();
 
 echo "\n\nGet state\n";
-var_dump($secondMachine->stateFactory('NOT_REQUESTED'));
+var_dump($secondMachine->state('NOT_REQUESTED'));

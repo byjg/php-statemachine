@@ -25,25 +25,7 @@ class FiniteStateMachineTest extends TestCase
             ->addTransition($transitionAB)
             ->addTransitions([$transitionAC, $transitionBD]);
 
-        
-        $this->assertEquals($stA, $stateMachine->stateFactory('A'));
-        $this->assertEquals($stB, $stateMachine->stateFactory('B'));
-        $this->assertEquals($stC, $stateMachine->stateFactory('C'));
-        $this->assertEquals($stD, $stateMachine->stateFactory('D'));
-        $this->assertNull($stateMachine->stateFactory('NO'));
-        $this->assertEquals($stA, $stateMachine->stateFactory('a'));
-        $this->assertEquals($stB, $stateMachine->stateFactory('b'));
-        $this->assertEquals($stC, $stateMachine->stateFactory('c'));
-        $this->assertEquals($stD, $stateMachine->stateFactory('d'));
-
-        $this->assertTrue($stateMachine->canTransition($stA, $stateMachine->stateFactory('B')));
-        $this->assertTrue($stateMachine->canTransition($stA, $stC));
-        $this->assertFalse($stateMachine->canTransition($stA, $stD));
-        $this->assertFalse($stateMachine->canTransition($stB, $stA));
-        $this->assertFalse($stateMachine->canTransition($stB, $stD));
-        $this->assertTrue($stateMachine->canTransition($stB, $stD, ["some_info"]));
-        $this->assertFalse($stateMachine->canTransition($stC, $stD));
-
+        // Assertions
         $this->assertEquals([$transitionAB, $transitionAC], $stateMachine->possibleTransitions($stA));
         $this->assertEquals([$transitionBD], $stateMachine->possibleTransitions($stB));
         $this->assertEquals([], $stateMachine->possibleTransitions($stC));
@@ -51,6 +33,51 @@ class FiniteStateMachineTest extends TestCase
 
         $this->assertEquals($transitionBD, $stateMachine->getTransition($stB, $stD));
         $this->assertNull($stateMachine->getTransition($stB, $stC));
+    
+        $this->canTransitionAssertions($stateMachine);
+    }
+
+    public function testCanTransitionSimpleMode()
+    {
+        $stateMachine = FiniteStateMachine::createMachine(
+            [
+                ["A", "B"],
+                ["A", "C"],
+                ["B", "D", function ($data) {
+                    return !is_null($data);
+                }]
+            ]
+            );
+
+        $this->canTransitionAssertions($stateMachine);
+    }
+
+    protected function canTransitionAssertions($stateMachine)
+    {        
+        $stA = new State("A");
+        $stB = new State("B");
+        $stC = new State("C");
+        $stD = new State("D");
+
+        $this->assertEquals($stA, $stateMachine->state('A'));
+        $this->assertEquals($stB, $stateMachine->state('B'));
+        $this->assertEquals($stC, $stateMachine->state('C'));
+        $this->assertEquals($stD, $stateMachine->state('D'));
+        $this->assertNull($stateMachine->state('NO'));
+        $this->assertEquals($stA, $stateMachine->state('a'));
+        $this->assertEquals($stB, $stateMachine->state('b'));
+        $this->assertEquals($stC, $stateMachine->state('c'));
+        $this->assertEquals($stD, $stateMachine->state('d'));
+
+
+
+        $this->assertTrue($stateMachine->canTransition($stA, $stateMachine->state('B')));
+        $this->assertTrue($stateMachine->canTransition($stA, $stC));
+        $this->assertFalse($stateMachine->canTransition($stA, $stD));
+        $this->assertFalse($stateMachine->canTransition($stB, $stA));
+        $this->assertFalse($stateMachine->canTransition($stB, $stD));
+        $this->assertTrue($stateMachine->canTransition($stB, $stD, ["some_info"]));
+        $this->assertFalse($stateMachine->canTransition($stC, $stD));
 
         $this->assertTrue($stateMachine->isInitialState($stA));
         $this->assertFalse($stateMachine->isInitialState($stB));
