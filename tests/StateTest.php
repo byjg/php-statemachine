@@ -13,8 +13,8 @@ class StateTest extends TestCase
         // Sanity Test
         $this->assertEquals('MY_STATE', $state->getState());
         $this->assertNull($state->getData());
-        
-        
+
+
         // Nothing should happen
         $state->process();
     }

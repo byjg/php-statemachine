@@ -33,7 +33,7 @@ class FiniteStateMachineTest extends TestCase
 
         $this->assertEquals($transitionBD, $stateMachine->getTransition($stB, $stD));
         $this->assertNull($stateMachine->getTransition($stB, $stC));
-    
+
         $this->canTransitionAssertions($stateMachine);
     }
 
@@ -53,7 +53,7 @@ class FiniteStateMachineTest extends TestCase
     }
 
     protected function canTransitionAssertions($stateMachine)
-    {        
+    {
         $stA = new State("A");
         $stB = new State("B");
         $stC = new State("C");

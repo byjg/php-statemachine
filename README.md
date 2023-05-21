@@ -160,7 +160,7 @@ and to what state.
 
 ```php
 $stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])); // returns LAST_UNITS
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])); // returns IN_STOCK 
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])); // returns IN_STOCK
 $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])); // returns OUT_OF_STOCK
 ```
 
@@ -178,8 +178,8 @@ $stN = new State('SOMESTATE', function ($data) {
 // After run and return $stN object
 // We can do this:
 
-$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...])); 
-$resultState->process(); // This will run the closure defined with the data used to validate it. 
+$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...]));
+$resultState->process(); // This will run the closure defined with the data used to validate it.
 ```
 
 ## Other Methods
@@ -203,13 +203,13 @@ $stateMachine->possibleTransitions($stA);
 
 ```php
 // Return null if doesn't exist, otherwise return the object State
-$state = $stateMachine->state('OUT_OF_STOCK');  
+$state = $stateMachine->state('OUT_OF_STOCK');
 ```
 
 ## Install
 
 ```bash
-composer require "byjg/statemachine
+composer require "byjg/statemachine"
 ```
 
 ----
