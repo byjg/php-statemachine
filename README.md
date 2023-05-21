@@ -15,7 +15,7 @@ Differently from other State machines, this implementation doesn't have an initi
 
 Let's use the following example.
 
-```
+```text
                            .-.
                           ( ? )
        .---.     .---.     '-'      .---.
@@ -40,8 +40,8 @@ $stC = new State("C");
 $stD = new State("D");
 ```
 
-Then, we define the transitions. Note that each transition object can have a closure 
-that receives a mixed type `data`. This closure needs to return `true` or `false`, 
+Then, we define the transitions. Note that each transition object can have a closure
+that receives a mixed type `data`. This closure needs to return `true` or `false`,
 allowing or not the transition.
 
 ```php
@@ -73,14 +73,40 @@ $stateMachine->canTransition($stB, $stD, ["some_info"]); // returns true
 $stateMachine->canTransition($stC, $stD); //returns false
 ```
 
+We can also check if a state is initial or final:
+
+```php
+$stateMachine->isInitial($stA); // returns true
+$stateMachine->isInitial($stB); // returns false
+$stateMachine->isFinal($stA); // returns false
+$stateMachine->isFinal($stC); // returns true
+$stateMachine->isFinal($stD); // returns true
+```
+
+### Other ways to create the State Machine
+
+Alternatively, you can create the state machine using the `createMachine` factory method with arguments as follows:
+
+```php
+$stateMachine = FiniteStateMachine::createMachine(
+    [
+        ['A', 'B'],
+        ['A', 'C'],
+        ['B', 'D', function($data) {
+            return !is_null($data);
+        }]
+    ]
+);
+```
+
 ## Using the Auto Transition
 
-Another feature of this component is that depending on the state you are in and the 
+Another feature of this component is that depending on the state you are in and the
 data you pass to the state machine, it can decide what is the next state you can be.
 
 Let's analyze the following states.
 
-```
+```text
      .--------------.                  .----------.
      | Out of Stock |                  | In Stock |
      '--------------'                  '----------'
@@ -99,8 +125,8 @@ Let's analyze the following states.
                '------------'
 ```
 
-The transition is only possible if some conditions are satisfied. So, let's create the state, 
-the possible transitions and its conditions. 
+The transition is only possible if some conditions are satisfied. So, let's create the state,
+the possible transitions and its conditions.
 
 ```php
 // States:
@@ -130,17 +156,17 @@ $stateMachine = FiniteStateMachine::createMachine()
 ```
 
 The method `autoTransitionFrom` will check if is possible do the transition with the actual data
-and to what state. 
+and to what state.
 
 ```php
 $stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])); // returns LAST_UNITS
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])); // returns IN_STOCK 
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])); // returns IN_STOCK
 $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])); // returns OUT_OF_STOCK
 ```
 
-When auto transitioned the state object returned have the `->getData()` with the data used to validate it. 
+When auto transitioned the state object returned have the `->getData()` with the data used to validate it.
 
-Also, it is possible create the transation with a closure to process the state. 
+Also, it is possible create the transition with a closure to process the state.
 
 e.g.
 
@@ -152,13 +178,13 @@ $stN = new State('SOMESTATE', function ($data) {
 // After run and return $stN object
 // We can do this:
 
-$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...])); 
-$resultState->process(); // This will run the closure defined with the data used to validate it. 
+$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...]));
+$resultState->process(); // This will run the closure defined with the data used to validate it.
 ```
 
 ## Other Methods
 
-### Create multiple transactions:
+### Create multiple transactions
 
 ```php
 $transitions = Transition::createMultiple([$from1, $from2], $to, $condition);
@@ -177,13 +203,13 @@ $stateMachine->possibleTransitions($stA);
 
 ```php
 // Return null if doesn't exist, otherwise return the object State
-$state = $stateMachine->stateFactory('OUT_OF_STOCK');  
+$state = $stateMachine->state('OUT_OF_STOCK');
 ```
 
 ## Install
 
-```
-composer require "byjg/statemachine
+```bash
+composer require "byjg/statemachine"
 ```
 
 ----

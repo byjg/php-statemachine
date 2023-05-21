@@ -12,9 +12,33 @@ class FiniteStateMachine
 
     protected $throwError = false;
 
-    public static function createMachine()
+    public static function createMachine($transitionList = [])
     {
-        return new FiniteStateMachine();
+        $stateList = [];
+        $stateMachine = new FiniteStateMachine();
+        foreach ($transitionList as $transition) {
+            if (isset($stateList[$transition[0]])) {
+                $st1 = $stateList[$transition[0]];
+            } else {
+                $st1 = new State($transition[0]);
+                $stateList[$transition[0]] = $st1;
+            }
+
+            if (isset($stateList[$transition[1]])) {
+                $st2 = $stateList[$transition[1]];
+            } else {
+                $st2 = new State($transition[1]);
+                $stateList[$transition[1]] = $st2;
+            }
+
+            if (isset($transition[2])) {
+                $stateMachine->addTransition(new Transition($st1, $st2, $transition[2]));
+            } else {
+                $stateMachine->addTransition(new Transition($st1, $st2));
+            }
+        }
+
+        return $stateMachine;
     }
 
     public function throwErrorIfCannotTransition()
@@ -58,7 +82,7 @@ class FiniteStateMachine
     public function possibleTransitions(State $currentState)
     {
         $next = array_map(function ($key, $value) use ($currentState) {
-            if (strpos($key, "${currentState}___") === 0) {
+            if (strpos($key, "{$currentState}___") === 0) {
                 return $value;
             }
             return null;
@@ -98,7 +122,7 @@ class FiniteStateMachine
 
         if ($this->throwError) {
             throw new TransitionException(
-                "There is not possible transitions from ${currentState} with the data provided"
+                "There is not possible transitions from {$currentState} with the data provided"
             );
         }
 
@@ -110,16 +134,16 @@ class FiniteStateMachine
      */
     public function canTransition(State $currentState, State $desiredState, $data = null)
     {
-        $result = $this->checkIfcanTransition($currentState, $desiredState, $data);
+        $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
 
         if ($this->throwError && !$result) {
-            throw new TransitionException("Cannot transition from ${currentState} to ${desiredState}");
+            throw new TransitionException("Cannot transition from {$currentState} to {$desiredState}");
         }
 
         return $result;
     }
 
-    protected function checkIfcanTransition(State $currentState, State $desiredState, $data = null)
+    protected function checkIfCanTransition(State $currentState, State $desiredState, $data = null)
     {
         $transition = $this->getTransition($currentState, $desiredState);
 
@@ -133,12 +157,34 @@ class FiniteStateMachine
     /**
      * @param string $state
      */
-    public function stateFactory($state)
+    public function state($state)
     {
         if (isset($this->stateList[strtoupper($state)])) {
             return $this->stateList[strtoupper($state)];
         }
 
         return null;
+    }
+
+    public function isInitialState(State $state)
+    {
+        foreach ($this->transitionList as $transition) {
+            if ($transition->getDesiredState() == $state) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function isFinalState(State $state)
+    {
+        foreach ($this->transitionList as $transition) {
+            if ($transition->getCurrentState() == $state) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

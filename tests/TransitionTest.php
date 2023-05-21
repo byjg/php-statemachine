@@ -43,7 +43,7 @@ class TransitionTest extends TestCase
         $transitionList = Transition::createMultiple([$state1, $state2], $state3);
 
         $this->assertEquals(2, count($transitionList));
-        
+
         $this->assertEquals($state1, $transitionList[0]->getCurrentState());
         $this->assertEquals($state3, $transitionList[0]->getDesiredState());
 
