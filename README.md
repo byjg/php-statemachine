@@ -212,5 +212,12 @@ $state = $stateMachine->state('OUT_OF_STOCK');
 composer require "byjg/statemachine"
 ```
 
+## Dependencies
+
+```mermaid  
+flowchart TD  
+    byjg/statemachine  
+```
+
 ----
 [Open source ByJG](http://opensource.byjg.com)
