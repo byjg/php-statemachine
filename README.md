@@ -1,10 +1,10 @@
 # State Machine
 
-[![Build Status](https://github.com/byjg/statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/statemachine/actions/workflows/phpunit.yml)
+[![Build Status](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml)
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
-[![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/statemachine/)
-[![GitHub license](https://img.shields.io/github/license/byjg/statemachine.svg)](https://opensource.byjg.com/opensource/licensing.html)
-[![GitHub release](https://img.shields.io/github/release/byjg/statemachine.svg)](https://github.com/byjg/statemachine/releases/)
+[![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-statemachine/)
+[![GitHub license](https://img.shields.io/github/license/byjg/php-statemachine.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub release](https://img.shields.io/github/release/byjg/php-statemachine.svg)](https://github.com/byjg/php-statemachine/releases/)
 
 This component implements a Finite State Machine, which can define several states and group them in a collection
 of transitions (from one state to another state). In addition, each state can have a conditional allowing move to another state.
@@ -14,19 +14,11 @@ Differently from other State machines, this implementation doesn't have an initi
 ## Basic Example
 
 Let's use the following example.
-
-```text
-                           .-.
-                          ( ? )
-       .---.     .---.     '-'      .---.
-       | A |---->| B |------------->| D |
-       '---'     '---'              '---'
-         |
-         |
-         v
-       .---.
-       | C |
-       '---'
+```mermaid
+flowchart LR
+    A[State A] --> B[State B]
+    A --> C[State C]
+    B -- Some Event --> D[State D]
 ```
 
 We have the states A, B, C, and D, and it's their possible transitions.
@@ -106,23 +98,11 @@ data you pass to the state machine, it can decide what is the next state you can
 
 Let's analyze the following states.
 
-```text
-     .--------------.                  .----------.
-     | Out of Stock |                  | In Stock |
-     '--------------'                  '----------'
-             ^                               ^
-             |                               |
-    qty == 0 |              qty >= min_stock |
-             |       .-.                     |
-             '------( . )--------------------'
-                     '-'
-                      |
-                      | 0 < qty < min_stock
-                      |
-                      v
-               .------------.
-               | Last Units |
-               '------------'
+```mermaid
+flowchart LR
+    .[Initial State] -- qty == 0 --> A[Out of stock]
+    . -- 0 < qty < min_stock --> B[Last Units]
+    . -- qty >= min_stock --> C[In Stock]
 ```
 
 The transition is only possible if some conditions are satisfied. So, let's create the state,
@@ -210,6 +190,13 @@ $state = $stateMachine->state('OUT_OF_STOCK');
 
 ```bash
 composer require "byjg/statemachine"
+```
+
+## Dependencies
+
+```mermaid  
+flowchart TD  
+    byjg/statemachine  
 ```
 
 ----
