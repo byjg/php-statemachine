@@ -1,12 +1,14 @@
 <?php
 
+namespace Tests;
+
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
 use PHPUnit\Framework\TestCase;
 
 class TransitionTest extends TestCase
 {
-    public function testTransition()
+    public function testTransition(): void
     {
         $state1 = new State('1');
         $state2 = new State('2');
@@ -23,7 +25,7 @@ class TransitionTest extends TestCase
         $this->assertEquals(['data'], $transition->getDesiredState(['data'])->getData());
     }
 
-    public function testRunTransition()
+    public function testRunTransition(): void
     {
         $state1 = new State('1');
         $state2 = new State('2');
@@ -34,7 +36,7 @@ class TransitionTest extends TestCase
         $this->assertFalse($transition->runTransitionFunction(['key_sample'=>'1']));
     }
 
-    public function testMultipleTransition()
+    public function testMultipleTransition(): void
     {
         $state1 = new State('1');
         $state2 = new State('2');

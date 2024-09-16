@@ -6,20 +6,17 @@ use Closure;
 
 class State
 {
-    protected $state = null;
+    protected ?string $state = null;
 
-    /**
-     * @var Closure
-     */
-    protected $stateFunction;
+    protected ?Closure $stateFunction;
 
-    protected $data;
+    protected ?array $data = null;
 
     /**
      * @param string $state
-     * @param Closure $stateFunction
+     * @param Closure|null $stateFunction
      */
-    public function __construct($state, Closure $stateFunction = null)
+    public function __construct(string $state, Closure $stateFunction = null)
     {
         $this->state = $state;
         $this->stateFunction = $stateFunction;
@@ -30,22 +27,22 @@ class State
         return $this->getState();
     }
 
-    public function getState()
+    public function getState(): string
     {
         return strtoupper($this->state);
     }
 
-    public function getData()
+    public function getData(): ?array
     {
         return $this->data;
     }
 
-    public function setData($data)
+    public function setData($data): void
     {
         $this->data = $data;
     }
 
-    public function process()
+    public function process(): void
     {
         if (!empty($this->stateFunction)) {
             call_user_func_array($this->stateFunction, [$this->data]);

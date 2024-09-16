@@ -1,5 +1,7 @@
 <?php
 
+namespace Tests;
+
 use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
@@ -7,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 class FiniteStateMachineTest extends TestCase
 {
-    public function testCanTransition()
+    public function testCanTransition(): void
     {
         $stA = new State("A");
         $stB = new State("B");
@@ -37,7 +39,7 @@ class FiniteStateMachineTest extends TestCase
         $this->canTransitionAssertions($stateMachine);
     }
 
-    public function testCanTransitionSimpleMode()
+    public function testCanTransitionSimpleMode(): void
     {
         $stateMachine = FiniteStateMachine::createMachine(
             [
@@ -52,7 +54,7 @@ class FiniteStateMachineTest extends TestCase
         $this->canTransitionAssertions($stateMachine);
     }
 
-    protected function canTransitionAssertions($stateMachine)
+    protected function canTransitionAssertions($stateMachine): void
     {
         $stA = new State("A");
         $stB = new State("B");
@@ -90,7 +92,7 @@ class FiniteStateMachineTest extends TestCase
         $this->assertTrue($stateMachine->isFinalState($stD));
     }
 
-    public function testAutoTransition()
+    public function testAutoTransition(): void
     {
         $stInitial = new State("__VOID__");
         $stInStock = new State("IN_STOCK");
@@ -133,7 +135,7 @@ class FiniteStateMachineTest extends TestCase
         );
     }
 
-    public function testAutoTransition_2()
+    public function testAutoTransition_2(): void
     {
         $stLastUnits = new State("LAST_UNITS");
         $stOutOfStock = new State("OUT_OF_STOCK");

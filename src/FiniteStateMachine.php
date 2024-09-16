@@ -2,17 +2,18 @@
 
 namespace ByJG\StateMachine;
 
+use Closure;
 use PHPUnit\Util\Exception;
 
 class FiniteStateMachine
 {
-    protected $transitionList = [];
+    protected array $transitionList = [];
 
-    protected $stateList = [];
+    protected array $stateList = [];
 
-    protected $throwError = false;
+    protected bool $throwError = false;
 
-    public static function createMachine($transitionList = [])
+    public static function createMachine(array $transitionList = []): FiniteStateMachine
     {
         $stateList = [];
         $stateMachine = new FiniteStateMachine();
@@ -41,18 +42,18 @@ class FiniteStateMachine
         return $stateMachine;
     }
 
-    public function throwErrorIfCannotTransition()
+    public function throwErrorIfCannotTransition(): static
     {
         $this->throwError = true;
         return $this;
     }
 
-    protected function getKey($currentState, $desiredState)
+    protected function getKey(State $currentState, State $desiredState): string
     {
         return $currentState->getState() . "___" . $desiredState->getState();
     }
 
-    public function addTransition(Transition $transition)
+    public function addTransition(Transition $transition): static
     {
         $this->transitionList[
             $this->getKey($transition->getCurrentState(), $transition->getDesiredState())
@@ -68,10 +69,10 @@ class FiniteStateMachine
     }
 
     /**
-     * @param Transition[] $transitions
+     * @param array $transitions
      * @return $this
      */
-    public function addTransitions($transitions)
+    public function addTransitions(array $transitions): static
     {
         foreach ($transitions as $transition) {
             $this->addTransition($transition);
@@ -79,7 +80,7 @@ class FiniteStateMachine
         return $this;
     }
 
-    public function possibleTransitions(State $currentState)
+    public function possibleTransitions(State $currentState): array
     {
         $next = array_map(function ($key, $value) use ($currentState) {
             if (strpos($key, "{$currentState}___") === 0) {
@@ -104,10 +105,11 @@ class FiniteStateMachine
      * Undocumented function
      *
      * @param State $currentState
-     * @param mixed $data
-     * @return State
+     * @param array $data
+     * @return State|null
+     * @throws TransitionException
      */
-    public function autoTransitionFrom(State $currentState, $data)
+    public function autoTransitionFrom(State $currentState, array $data): ?State
     {
         $transitions = $this->possibleTransitions($currentState);
 
@@ -132,7 +134,7 @@ class FiniteStateMachine
     /**
      * @throws TransitionException
      */
-    public function canTransition(State $currentState, State $desiredState, $data = null)
+    public function canTransition(State $currentState, State $desiredState, array $data = null): bool
     {
         $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
 
@@ -143,7 +145,7 @@ class FiniteStateMachine
         return $result;
     }
 
-    protected function checkIfCanTransition(State $currentState, State $desiredState, $data = null)
+    protected function checkIfCanTransition(State $currentState, State $desiredState, array $data = null): bool
     {
         $transition = $this->getTransition($currentState, $desiredState);
 
@@ -157,7 +159,7 @@ class FiniteStateMachine
     /**
      * @param string $state
      */
-    public function state($state)
+    public function state(string $state): ?State
     {
         if (isset($this->stateList[strtoupper($state)])) {
             return $this->stateList[strtoupper($state)];
@@ -166,7 +168,7 @@ class FiniteStateMachine
         return null;
     }
 
-    public function isInitialState(State $state)
+    public function isInitialState(State $state): bool
     {
         foreach ($this->transitionList as $transition) {
             if ($transition->getDesiredState() == $state) {
@@ -177,7 +179,7 @@ class FiniteStateMachine
         return true;
     }
 
-    public function isFinalState(State $state)
+    public function isFinalState(State $state): bool
     {
         foreach ($this->transitionList as $transition) {
             if ($transition->getCurrentState() == $state) {
