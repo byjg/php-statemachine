@@ -1,12 +1,14 @@
 <?php
 
+namespace Tests;
+
 use ByJG\StateMachine\State;
 use PHPUnit\Framework\TestCase;
 
 class StateTest extends TestCase
 {
 
-    public function testState()
+    public function testState(): void
     {
         $state = new State('MY_STATE');
 
@@ -19,7 +21,7 @@ class StateTest extends TestCase
         $state->process();
     }
 
-    public function testStateClosure()
+    public function testStateClosure(): void
     {
         $varControl = null;
 

@@ -9,17 +9,17 @@ class Transition
     /**
      * @var State
      */
-    protected $currentState;
+    protected State $currentState;
 
     /**
      * @var State
      */
-    protected $desiredState;
+    protected State $desiredState;
 
     /**
-     * @var Closure
+     * @var Closure|null
      */
-    protected $transitionFunction;
+    protected ?Closure $transitionFunction;
 
     /**
      * @param State $currentState
@@ -39,7 +39,7 @@ class Transition
      * @param Closure|null $transitionFunction
      * @return Transition
      */
-    public static function create(State $currentState, State $desiredState, Closure $transitionFunction = null)
+    public static function create(State $currentState, State $desiredState, Closure $transitionFunction = null): Transition
     {
         return new Transition($currentState, $desiredState, $transitionFunction);
     }
@@ -50,7 +50,7 @@ class Transition
      * @param Closure|null $transitionFunction
      * @return Transition[]
      */
-    public static function createMultiple($currentState, State $desiredState, Closure $transitionFunction = null)
+    public static function createMultiple(array $currentState, State $desiredState, Closure $transitionFunction = null): array
     {
         $result = [];
         foreach ($currentState as $from) {
@@ -62,15 +62,16 @@ class Transition
     /**
      * @return State
      */
-    public function getCurrentState()
+    public function getCurrentState(): State
     {
         return $this->currentState;
     }
 
     /**
+     * @param array|null $data
      * @return State
      */
-    public function getDesiredState($data = null)
+    public function getDesiredState(array $data = null): State
     {
         $desiredState = clone $this->desiredState;
         $desiredState->setData($data);
@@ -79,10 +80,10 @@ class Transition
     }
 
     /**
-     * @param $data
+     * @param array|null $data
      * @return bool|mixed
      */
-    public function runTransitionFunction($data)
+    public function runTransitionFunction(?array $data): mixed
     {
         if (!empty($this->transitionFunction)) {
             return call_user_func_array($this->transitionFunction, [$data]);
