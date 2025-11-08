@@ -26,7 +26,7 @@ class Transition
      * @param State $desiredState
      * @param Closure|null $transitionFunction
      */
-    public function __construct(State $currentState, State $desiredState, Closure $transitionFunction = null)
+    public function __construct(State $currentState, State $desiredState, ?Closure $transitionFunction = null)
     {
         $this->currentState = $currentState;
         $this->desiredState = $desiredState;
@@ -39,7 +39,7 @@ class Transition
      * @param Closure|null $transitionFunction
      * @return Transition
      */
-    public static function create(State $currentState, State $desiredState, Closure $transitionFunction = null): Transition
+    public static function create(State $currentState, State $desiredState, ?Closure $transitionFunction = null): Transition
     {
         return new Transition($currentState, $desiredState, $transitionFunction);
     }
@@ -50,7 +50,7 @@ class Transition
      * @param Closure|null $transitionFunction
      * @return Transition[]
      */
-    public static function createMultiple(array $currentState, State $desiredState, Closure $transitionFunction = null): array
+    public static function createMultiple(array $currentState, State $desiredState, ?Closure $transitionFunction = null): array
     {
         $result = [];
         foreach ($currentState as $from) {
@@ -71,7 +71,7 @@ class Transition
      * @param array|null $data
      * @return State
      */
-    public function getDesiredState(array $data = null): State
+    public function getDesiredState(?array $data = null): State
     {
         $desiredState = clone $this->desiredState;
         $desiredState->setData($data);

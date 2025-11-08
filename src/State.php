@@ -16,7 +16,7 @@ class State
      * @param string $state
      * @param Closure|null $stateFunction
      */
-    public function __construct(string $state, Closure $stateFunction = null)
+    public function __construct(string $state, ?Closure $stateFunction = null)
     {
         $this->state = $state;
         $this->stateFunction = $stateFunction;
