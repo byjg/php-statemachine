@@ -3,6 +3,7 @@
 namespace Tests;
 
 use ByJG\StateMachine\State;
+use ByJG\StateMachine\StateActionInterface;
 use PHPUnit\Framework\TestCase;
 
 class StateTest extends TestCase
@@ -21,11 +22,23 @@ class StateTest extends TestCase
         $state->process();
     }
 
-    public function testStateClosure(): void
+    public function testStateAction(): void
     {
         $varControl = null;
 
-        $state = new State('MY_STATE', function ($data) use (&$varControl) {$varControl = $data;});
+        $action = new class($varControl) implements StateActionInterface {
+            private $varControl;
+
+            public function __construct(&$varControl) {
+                $this->varControl = &$varControl;
+            }
+
+            public function execute(?array $data): void {
+                $this->varControl = $data;
+            }
+        };
+
+        $state = new State('MY_STATE', $action);
 
         // Sanity Tests
         $this->assertEquals('MY_STATE', $state->getState());

@@ -2,9 +2,6 @@
 
 namespace ByJG\StateMachine;
 
-use Closure;
-use PHPUnit\Util\Exception;
-
 class FiniteStateMachine
 {
     protected array $transitionList = [];
@@ -134,7 +131,7 @@ class FiniteStateMachine
     /**
      * @throws TransitionException
      */
-    public function canTransition(State $currentState, State $desiredState, array $data = null): bool
+    public function canTransition(State $currentState, State $desiredState, ?array $data = null): bool
     {
         $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
 
@@ -145,7 +142,7 @@ class FiniteStateMachine
         return $result;
     }
 
-    protected function checkIfCanTransition(State $currentState, State $desiredState, array $data = null): bool
+    protected function checkIfCanTransition(State $currentState, State $desiredState, ?array $data = null): bool
     {
         $transition = $this->getTransition($currentState, $desiredState);
 
