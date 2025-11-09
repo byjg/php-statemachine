@@ -4,6 +4,7 @@ namespace Tests;
 
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
+use ByJG\StateMachine\TransitionConditionInterface;
 use PHPUnit\Framework\TestCase;
 
 class TransitionTest extends TestCase
@@ -30,7 +31,13 @@ class TransitionTest extends TestCase
         $state1 = new State('1');
         $state2 = new State('2');
 
-        $transition = Transition::create($state1, $state2, function ($data) { return isset($data['key']); });
+        $condition = new class implements TransitionConditionInterface {
+            public function canTransition(?array $data): bool {
+                return isset($data['key']);
+            }
+        };
+
+        $transition = Transition::create($state1, $state2, $condition);
 
         $this->assertTrue($transition->runTransitionFunction(['key'=>'1']));
         $this->assertFalse($transition->runTransitionFunction(['key_sample'=>'1']));

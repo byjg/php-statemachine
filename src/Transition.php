@@ -2,8 +2,6 @@
 
 namespace ByJG\StateMachine;
 
-use Closure;
-
 class Transition
 {
     /**
@@ -17,44 +15,44 @@ class Transition
     protected State $desiredState;
 
     /**
-     * @var Closure|null
+     * @var TransitionConditionInterface|null
      */
-    protected ?Closure $transitionFunction;
+    protected ?TransitionConditionInterface $transitionCondition;
 
     /**
      * @param State $currentState
      * @param State $desiredState
-     * @param Closure|null $transitionFunction
+     * @param TransitionConditionInterface|null $transitionCondition
      */
-    public function __construct(State $currentState, State $desiredState, ?Closure $transitionFunction = null)
+    public function __construct(State $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null)
     {
         $this->currentState = $currentState;
         $this->desiredState = $desiredState;
-        $this->transitionFunction = $transitionFunction;
+        $this->transitionCondition = $transitionCondition;
     }
 
     /**
      * @param State $currentState
      * @param State $desiredState
-     * @param Closure|null $transitionFunction
+     * @param TransitionConditionInterface|null $transitionCondition
      * @return Transition
      */
-    public static function create(State $currentState, State $desiredState, ?Closure $transitionFunction = null): Transition
+    public static function create(State $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null): Transition
     {
-        return new Transition($currentState, $desiredState, $transitionFunction);
+        return new Transition($currentState, $desiredState, $transitionCondition);
     }
 
     /**
      * @param State[] $currentState
      * @param State $desiredState
-     * @param Closure|null $transitionFunction
+     * @param TransitionConditionInterface|null $transitionCondition
      * @return Transition[]
      */
-    public static function createMultiple(array $currentState, State $desiredState, ?Closure $transitionFunction = null): array
+    public static function createMultiple(array $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null): array
     {
         $result = [];
         foreach ($currentState as $from) {
-            $result[] = new Transition($from, $desiredState, $transitionFunction);
+            $result[] = new Transition($from, $desiredState, $transitionCondition);
         }
         return $result;
     }
@@ -81,12 +79,12 @@ class Transition
 
     /**
      * @param array|null $data
-     * @return bool|mixed
+     * @return bool
      */
-    public function runTransitionFunction(?array $data): mixed
+    public function runTransitionFunction(?array $data): bool
     {
-        if (!empty($this->transitionFunction)) {
-            return call_user_func_array($this->transitionFunction, [$data]);
+        if (!empty($this->transitionCondition)) {
+            return $this->transitionCondition->canTransition($data);
         }
 
         return true;

@@ -2,9 +2,6 @@
 
 namespace ByJG\StateMachine;
 
-use Closure;
-use PHPUnit\Util\Exception;
-
 class FiniteStateMachine
 {
     protected array $transitionList = [];

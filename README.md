@@ -11,6 +11,13 @@ of transitions (from one state to another state). In addition, each state can ha
 
 Differently from other State machines, this implementation doesn't have an initial or final state.
 
+## Documentation
+
+- [Basic Usage](docs/basic-usage.md)
+- [Auto Transition](docs/auto-transition.md)
+- [Error Handling](docs/error-handling.md)
+- [Advanced Features](docs/advanced-features.md)
+
 ## Basic Example
 
 Let's use the following example.
@@ -32,16 +39,20 @@ $stC = new State("C");
 $stD = new State("D");
 ```
 
-Then, we define the transitions. Note that each transition object can have a closure
-that receives a mixed type `data`. This closure needs to return `true` or `false`,
-allowing or not the transition.
+Then, we define the transitions. Each transition can optionally have a condition that implements `TransitionConditionInterface`. The `canTransition()` method receives the `data` array and returns `true` or `false` to allow or deny the transition.
 
 ```php
+use ByJG\StateMachine\TransitionConditionInterface;
+
 $transitionA_B = new Transition($stA, $stB);
 $transitionA_C = new Transition($stA, $stC);
-$transitionB_D = new Transition($stB, $stD, function($data) {
-    return !is_null($data);
-});
+
+$condition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return !is_null($data);
+    }
+};
+$transitionB_D = new Transition($stB, $stD, $condition);
 ```
 
 After creating the states and the transition, we can create the State Machine:
@@ -68,11 +79,11 @@ $stateMachine->canTransition($stC, $stD); //returns false
 We can also check if a state is initial or final:
 
 ```php
-$stateMachine->isInitial($stA); // returns true
-$stateMachine->isInitial($stB); // returns false
-$stateMachine->isFinal($stA); // returns false
-$stateMachine->isFinal($stC); // returns true
-$stateMachine->isFinal($stD); // returns true
+$stateMachine->isInitialState($stA); // returns true
+$stateMachine->isInitialState($stB); // returns false
+$stateMachine->isFinalState($stA); // returns false
+$stateMachine->isFinalState($stC); // returns true
+$stateMachine->isFinalState($stD); // returns true
 ```
 
 ### Other ways to create the State Machine
@@ -80,13 +91,17 @@ $stateMachine->isFinal($stD); // returns true
 Alternatively, you can create the state machine using the `createMachine` factory method with arguments as follows:
 
 ```php
+$condition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return !is_null($data);
+    }
+};
+
 $stateMachine = FiniteStateMachine::createMachine(
     [
         ['A', 'B'],
         ['A', 'C'],
-        ['B', 'D', function($data) {
-            return !is_null($data);
-        }]
+        ['B', 'D', $condition]
     ]
 );
 ```
@@ -109,24 +124,37 @@ The transition is only possible if some conditions are satisfied. So, let's crea
 the possible transitions and its conditions.
 
 ```php
+use ByJG\StateMachine\TransitionConditionInterface;
+
 // States:
 $stInitial = new State("__VOID__");
 $stInStock = new State("IN_STOCK");
 $stLastUnits = new State("LAST_UNITS");
 $stOutOfStock = new State("OUT_OF_STOCK");
 
+// Transition conditions:
+$inStockCondition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return $data["qty"] >= $data["min_stock"];
+    }
+};
+
+$lastUnitsCondition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
+    }
+};
+
+$outOfStockCondition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return $data["qty"] == 0;
+    }
+};
+
 // Transitions:
-$transitionInStock = Transition::create($stInitial, $stInStock, function ($data) {
-    return $data["qty"] >= $data["min_stock"];
-});
-
-$transitionLastUnits = Transition::create($stInitial, $stLastUnits, function ($data) {
-    return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
-});
-
-$transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, function($data) {
-    return $data["qty"] == 0;
-});
+$transitionInStock = Transition::create($stInitial, $stInStock, $inStockCondition);
+$transitionLastUnits = Transition::create($stInitial, $stLastUnits, $lastUnitsCondition);
+$transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, $outOfStockCondition);
 
 // Create the Machine:
 $stateMachine = FiniteStateMachine::createMachine()
@@ -135,38 +163,56 @@ $stateMachine = FiniteStateMachine::createMachine()
     ->addTransition($transitionOutOfStock);
 ```
 
-The method `autoTransitionFrom` will check if is possible do the transition with the actual data
+The method `autoTransitionFrom` will check if is possible to do the transition with the actual data
 and to what state.
 
 ```php
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])); // returns LAST_UNITS
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])); // returns IN_STOCK
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])); // returns OUT_OF_STOCK
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20]); // returns LAST_UNITS
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20]); // returns IN_STOCK
+$stateMachine->autoTransitionFrom($stInitial, ["qty" => 0, "min_stock" => 20]); // returns OUT_OF_STOCK
 ```
 
-When auto transitioned the state object returned have the `->getData()` with the data used to validate it.
+When auto transitioned, the state object returned has the `->getData()` method with the data used to validate it.
 
-Also, it is possible create the transition with a closure to process the state.
+### Processing State with Actions
+
+You can also create a state with an action that will execute when the state is reached.
 
 e.g.
 
 ```php
-$stN = new State('SOMESTATE', function ($data) {
-    // execute some operation with the data
-})
+use ByJG\StateMachine\StateActionInterface;
 
-// After run and return $stN object
-// We can do this:
+$action = new class implements StateActionInterface {
+    public function execute(?array $data): void {
+        // Execute some operation with the data
+        // This is the STATE action, not the transition condition
+        echo "Processing state with: " . json_encode($data);
+    }
+};
 
-$resultState = $stateMachine->autoTransitionFrom('STATE', [...  data ...]));
-$resultState->process(); // This will run the closure defined with the data used to validate it.
+$stN = new State('SOMESTATE', $action);
+
+// After autoTransition returns the $stN state object
+// You can execute its action:
+
+$resultState = $stateMachine->autoTransitionFrom('STATE', [... data ...]);
+$resultState->process(); // This will run the state's action with the data
 ```
+
+**Note:** The `TransitionConditionInterface` validates transitions (returns true/false to allow/deny). The `StateActionInterface` executes actions when the state is processed.
 
 ## Other Methods
 
-### Create multiple transactions
+### Create multiple transitions
 
 ```php
+$condition = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return isset($data["approved"]) && $data["approved"] === true;
+    }
+};
+
 $transitions = Transition::createMultiple([$from1, $from2], $to, $condition);
 
 $machine = FiniteStateMachine::createMachine()
@@ -194,9 +240,9 @@ composer require "byjg/statemachine"
 
 ## Dependencies
 
-```mermaid  
-flowchart TD  
-    byjg/statemachine  
+```mermaid
+flowchart TD
+    byjg/statemachine
 ```
 
 ----
