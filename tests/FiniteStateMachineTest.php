@@ -21,6 +21,7 @@ class FiniteStateMachineTest extends TestCase
         $transitionAC = new Transition($stA, $stC);
 
         $condition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return !is_null($data);
             }
@@ -47,6 +48,7 @@ class FiniteStateMachineTest extends TestCase
     public function testCanTransitionSimpleMode(): void
     {
         $condition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return !is_null($data);
             }
@@ -109,18 +111,21 @@ class FiniteStateMachineTest extends TestCase
         $stOutOfStock = new State("OUT_OF_STOCK");
 
         $inStockCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return $data["qty"] >= $data["min_stock"];
             }
         };
 
         $lastUnitsCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
             }
         };
 
         $outOfStockCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return $data["qty"] == 0;
             }
@@ -166,24 +171,28 @@ class FiniteStateMachineTest extends TestCase
         $stUnavailable = new State("UNAVAILABLE");
 
         $notRequestedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return !isset($data["invoice_number"]) && !isset($data["status"]);
             }
         };
 
         $requestedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
             }
         };
 
         $resuppliedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return isset($data["fulfilment_number"]);
             }
         };
 
         $unavailableCondition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return isset($data["status"]);
             }

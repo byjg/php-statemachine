@@ -32,6 +32,7 @@ class TransitionTest extends TestCase
         $state2 = new State('2');
 
         $condition = new class implements TransitionConditionInterface {
+            #[\Override]
             public function canTransition(?array $data): bool {
                 return isset($data['key']);
             }

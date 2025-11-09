@@ -33,6 +33,7 @@ class StateTest extends TestCase
                 $this->varControl = &$varControl;
             }
 
+            #[\Override]
             public function execute(?array $data): void {
                 $this->varControl = $data;
             }
