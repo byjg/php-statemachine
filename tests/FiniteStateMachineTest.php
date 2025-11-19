@@ -5,6 +5,7 @@ namespace Tests;
 use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
+use ByJG\StateMachine\TransitionConditionInterface;
 use PHPUnit\Framework\TestCase;
 
 class FiniteStateMachineTest extends TestCase
@@ -18,9 +19,14 @@ class FiniteStateMachineTest extends TestCase
 
         $transitionAB = new Transition($stA, $stB);
         $transitionAC = new Transition($stA, $stC);
-        $transitionBD = new Transition($stB, $stD, function ($data) {
-            return !is_null($data);
-        });
+
+        $condition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return !is_null($data);
+            }
+        };
+        $transitionBD = new Transition($stB, $stD, $condition);
 
         $stateMachine = FiniteStateMachine::createMachine()
             //    ->throwErrorIfCannotTransition()
@@ -41,13 +47,18 @@ class FiniteStateMachineTest extends TestCase
 
     public function testCanTransitionSimpleMode(): void
     {
+        $condition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return !is_null($data);
+            }
+        };
+
         $stateMachine = FiniteStateMachine::createMachine(
             [
                 ["A", "B"],
                 ["A", "C"],
-                ["B", "D", function ($data) {
-                    return !is_null($data);
-                }]
+                ["B", "D", $condition]
             ]
             );
 
@@ -99,16 +110,30 @@ class FiniteStateMachineTest extends TestCase
         $stLastUnits = new State("LAST_UNITS");
         $stOutOfStock = new State("OUT_OF_STOCK");
 
-        $transitionInStock = Transition::create($stInitial, $stInStock, function ($data) {
-            return $data["qty"] >= $data["min_stock"];
-        });
+        $inStockCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return $data["qty"] >= $data["min_stock"];
+            }
+        };
 
-        $transitionLastUnits = Transition::create($stInitial, $stLastUnits, function ($data) {
-            return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
-        });
-        $transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, function ($data) {
-            return $data["qty"] == 0;
-        });
+        $lastUnitsCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
+            }
+        };
+
+        $outOfStockCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return $data["qty"] == 0;
+            }
+        };
+
+        $transitionInStock = Transition::create($stInitial, $stInStock, $inStockCondition);
+        $transitionLastUnits = Transition::create($stInitial, $stLastUnits, $lastUnitsCondition);
+        $transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, $outOfStockCondition);
 
         $stateMachine = FiniteStateMachine::createMachine()
             ->addTransition($transitionInStock)
@@ -145,36 +170,56 @@ class FiniteStateMachineTest extends TestCase
         $stResupplied = new State("RESUPPLIED");
         $stUnavailable = new State("UNAVAILABLE");
 
+        $notRequestedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return !isset($data["invoice_number"]) && !isset($data["status"]);
+            }
+        };
+
+        $requestedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
+            }
+        };
+
+        $resuppliedCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data["fulfilment_number"]);
+            }
+        };
+
+        $unavailableCondition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data["status"]);
+            }
+        };
+
         $transitionNotRequested = Transition::createMultiple(
             [$stLastUnits, $stOutOfStock],
             $stNotRequested,
-            function ($data) {
-                return !isset($data["invoice_number"]) && !isset($data["status"]);
-            }
+            $notRequestedCondition
         );
 
         $transitionRequested = Transition::createMultiple(
             [$stLastUnits, $stOutOfStock],
             $stRequested,
-            function ($data) {
-                return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
-            }
+            $requestedCondition
         );
 
         $transitionResupplied = Transition::createMultiple(
             [$stLastUnits, $stOutOfStock, $stRequested],
             $stResupplied,
-            function ($data) {
-                return isset($data["fulfilment_number"]);
-            }
+            $resuppliedCondition
         );
 
         $transitionUnavailable = Transition::createMultiple(
             [$stLastUnits, $stOutOfStock],
             $stUnavailable,
-            function ($data) {
-                return isset($data["status"]);
-            }
+            $unavailableCondition
         );
 
         $stateMachine = FiniteStateMachine::createMachine()

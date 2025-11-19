@@ -2,24 +2,22 @@
 
 namespace ByJG\StateMachine;
 
-use Closure;
-
 class State
 {
     protected ?string $state = null;
 
-    protected ?Closure $stateFunction;
+    protected ?StateActionInterface $stateAction;
 
     protected ?array $data = null;
 
     /**
      * @param string $state
-     * @param Closure|null $stateFunction
+     * @param StateActionInterface|null $stateAction
      */
-    public function __construct(string $state, Closure $stateFunction = null)
+    public function __construct(string $state, ?StateActionInterface $stateAction = null)
     {
         $this->state = $state;
-        $this->stateFunction = $stateFunction;
+        $this->stateAction = $stateAction;
     }
 
     public function __toString()
@@ -44,8 +42,8 @@ class State
 
     public function process(): void
     {
-        if (!empty($this->stateFunction)) {
-            call_user_func_array($this->stateFunction, [$this->data]);
+        if (!empty($this->stateAction)) {
+            $this->stateAction->execute($this->data);
         }
     }
 }
