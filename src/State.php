@@ -4,7 +4,7 @@ namespace ByJG\StateMachine;
 
 class State
 {
-    protected ?string $state = null;
+    protected string $state;
 
     protected ?StateActionInterface $stateAction;
 
