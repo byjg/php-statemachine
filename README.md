@@ -1,11 +1,4 @@
----
-tags: [php]
----
-
 # State Machine
-
-This component implements a Finite State Machine, which can define several states and group them in a collection
-of transitions (from one state to another state). In addition, each state can have a conditional allowing move to another state.
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml)
@@ -14,14 +7,17 @@ of transitions (from one state to another state). In addition, each state can ha
 [![GitHub license](https://img.shields.io/github/license/byjg/php-statemachine.svg)](https://opensource.byjg.com/opensource/licensing.html)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-statemachine.svg)](https://github.com/byjg/php-statemachine/releases/)
 
+This component implements a Finite State Machine, which can define several states and group them in a collection
+of transitions (from one state to another state). In addition, each state can have a conditional allowing move to another state.
+
 Differently from other State machines, this implementation doesn't have an initial or final state.
 
 ## Documentation
 
-- [Basic Usage](basic-usage)
-- [Auto Transition](auto-transition)
-- [Error Handling](error-handling)
-- [Advanced Features](advanced-features)
+- [Basic Usage](docs/basic-usage.md)
+- [Auto Transition](docs/auto-transition.md)
+- [Error Handling](docs/error-handling.md)
+- [Advanced Features](docs/advanced-features.md)
 
 ## Basic Example
 
