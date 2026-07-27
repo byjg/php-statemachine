@@ -46,8 +46,31 @@ $condition = new class implements TransitionConditionInterface {
 $transitionB_D = new Transition($stB, $stD, $condition);
 ```
 
+A transition can also carry an **action** implementing `TransitionActionInterface`, which is
+the side effect of taking that transition:
+
+```php
+use ByJG\StateMachine\TransitionActionInterface;
+
+$notify = new class implements TransitionActionInterface {
+    public function execute(State $from, State $to, ?array $data): void {
+        // Runs when this specific transition is taken
+    }
+};
+$transitionB_D = new Transition($stB, $stD, $condition, $notify);
+```
+
 :::info
-The `TransitionConditionInterface` validates whether the transition can occur. This is different from `StateActionInterface` which executes actions when `$state->process()` is called.
+The two interfaces do different jobs. `TransitionConditionInterface` **decides** whether the
+transition may happen and must be free of side effects, since a condition may be evaluated
+for a transition that is not taken. `TransitionActionInterface` **does** the work, and only
+for the transition actually taken, when you call `$state->process()`.
+:::
+
+:::warning
+Actions belong to the transition, not to the state. That is what lets a single state behave
+differently depending on where it was reached from, without being split in two. See
+[Auto Transition](auto-transition.md#processing-transitions-with-actions).
 :::
 
 ## Creating the State Machine
@@ -102,7 +125,21 @@ $stateMachine = FiniteStateMachine::createMachine(
     [
         ['A', 'B'],
         ['A', 'C'],
-        ['B', 'D', $condition]
+        ['B', 'D', $condition],
+        ['C', 'D', $condition, $action]   // the fourth slot is the transition action
     ]
 );
+```
+
+## Performing a Transition
+
+`canTransition()` only answers a question. To actually move, use `transition()`, which
+returns the state reached — carrying the data and the transition it came through — or
+`null` when the move is not allowed:
+
+```php
+$next = $stateMachine->transition($stB, $stD, ["some_info"]);
+
+$repository->save($entity, $next);  // commit the move first
+$next->process();                   // then run the transition action
 ```

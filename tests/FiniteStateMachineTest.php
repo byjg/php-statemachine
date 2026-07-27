@@ -6,6 +6,7 @@ use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
 use ByJG\StateMachine\TransitionConditionInterface;
+use ByJG\StateMachine\TransitionException;
 use PHPUnit\Framework\TestCase;
 
 class FiniteStateMachineTest extends TestCase
@@ -246,6 +247,192 @@ class FiniteStateMachineTest extends TestCase
         $this->assertEquals(
             $stUnavailable->getState(),
             $stateMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->getState()
+        );
+    }
+
+    /**
+     * A state returned by autoTransitionFrom() carries the data used to validate the
+     * transition. isInitialState()/isFinalState() must answer about the state itself,
+     * regardless of the data attached to it.
+     */
+    public function testInitialAndFinalStateIgnoreAttachedData(): void
+    {
+        $stateMachine = FiniteStateMachine::createMachine(
+            [
+                ["A", "B"],
+                ["B", "C"],
+            ]
+        );
+
+        $stA = $stateMachine->state('A');
+        $stB = $stateMachine->autoTransitionFrom($stA, ["qty" => 10]);
+
+        // Sanity: we got B and it is carrying the data
+        $this->assertEquals("B", $stB->getState());
+        $this->assertEquals(["qty" => 10], $stB->getData());
+
+        // B has an inbound (A->B) and an outbound (B->C) transition
+        $this->assertFalse($stateMachine->isInitialState($stB));
+        $this->assertFalse($stateMachine->isFinalState($stB));
+
+        // Same question, same answers, when asked with the stored (dataless) instance
+        $this->assertFalse($stateMachine->isInitialState($stateMachine->state('B')));
+        $this->assertFalse($stateMachine->isFinalState($stateMachine->state('B')));
+
+        // C is reached with data and is genuinely final
+        $stC = $stateMachine->autoTransitionFrom($stB, ["qty" => 10]);
+        $this->assertEquals("C", $stC->getState());
+        $this->assertFalse($stateMachine->isInitialState($stC));
+        $this->assertTrue($stateMachine->isFinalState($stC));
+
+        // A is reached with data attached by hand and is genuinely initial
+        $detachedA = new State("A");
+        $detachedA->setData(["qty" => 10]);
+        $this->assertTrue($stateMachine->isInitialState($detachedA));
+        $this->assertFalse($stateMachine->isFinalState($detachedA));
+    }
+
+    /**
+     * The states held by the machine must not be reachable for mutation by the caller,
+     * otherwise setting data on a returned state corrupts the machine definition.
+     */
+    public function testMachineStatesAreNotMutableByTheCaller(): void
+    {
+        $stateMachine = FiniteStateMachine::createMachine(
+            [
+                ["A", "B"],
+            ]
+        );
+
+        // Leak path 1: the state() accessor
+        $stateMachine->state('A')->setData(["leaked" => true]);
+        $this->assertNull($stateMachine->state('A')->getData());
+
+        // Leak path 2: the transition accessors
+        $transition = $stateMachine->getTransition($stateMachine->state('A'), $stateMachine->state('B'));
+        $transition->getCurrentState()->setData(["leaked" => true]);
+        $this->assertNull($stateMachine->state('A')->getData());
+        $this->assertNull($transition->getCurrentState()->getData());
+
+        // The machine still behaves as declared
+        $this->assertTrue($stateMachine->isInitialState($stateMachine->state('A')));
+        $this->assertTrue($stateMachine->isFinalState($stateMachine->state('B')));
+        $this->assertTrue($stateMachine->canTransition($stateMachine->state('A'), $stateMachine->state('B')));
+    }
+
+    /**
+     * Two transitions between the same pair of states are a declaration error: the
+     * second one used to silently overwrite the first, discarding its condition.
+     */
+    public function testDuplicatedTransitionIsRejected(): void
+    {
+        $never = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return false;
+            }
+        };
+
+        $stA = new State("A");
+        $stB = new State("B");
+
+        $stateMachine = FiniteStateMachine::createMachine()
+            ->addTransition(new Transition($stA, $stB, $never));
+
+        $this->expectException(TransitionException::class);
+        $this->expectExceptionMessage("A transition from A to B is already defined");
+
+        $stateMachine->addTransition(new Transition($stA, $stB));
+    }
+
+    /**
+     * Builds a machine where "invoice_number + status" satisfies both conditions.
+     */
+    protected function ambiguousMachine(bool $requestedFirst): FiniteStateMachine
+    {
+        $requested = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
+            }
+        };
+
+        $unavailable = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data["status"]);
+            }
+        };
+
+        $stFrom = new State("LAST_UNITS");
+        $stRequested = new State("REQUESTED_RESUPPLY");
+        $stUnavailable = new State("UNAVAILABLE");
+
+        $transitions = [
+            Transition::create($stFrom, $stRequested, $requested),
+            Transition::create($stFrom, $stUnavailable, $unavailable),
+        ];
+
+        return FiniteStateMachine::createMachine()
+            ->addTransitions($requestedFirst ? $transitions : array_reverse($transitions));
+    }
+
+    /**
+     * By default the first transition declared that matches wins. This is a documented
+     * guarantee, so it is asserted rather than left to chance.
+     */
+    public function testAutoTransitionUsesFirstDeclaredMatch(): void
+    {
+        $data = ["invoice_number" => 10, "status" => "DNB"];
+        $stFrom = new State("LAST_UNITS");
+
+        $this->assertEquals(
+            "REQUESTED_RESUPPLY",
+            $this->ambiguousMachine(true)->autoTransitionFrom($stFrom, $data)->getState()
+        );
+
+        $this->assertEquals(
+            "UNAVAILABLE",
+            $this->ambiguousMachine(false)->autoTransitionFrom($stFrom, $data)->getState()
+        );
+    }
+
+    public function testAutoTransitionDetectsAmbiguityWhenEnabled(): void
+    {
+        $stFrom = new State("LAST_UNITS");
+        $stateMachine = $this->ambiguousMachine(true)->throwErrorIfAmbiguousTransition();
+
+        // Data matching a single condition still transitions normally
+        $this->assertEquals(
+            "REQUESTED_RESUPPLY",
+            $stateMachine->autoTransitionFrom($stFrom, ["invoice_number" => 10])->getState()
+        );
+        $this->assertEquals(
+            "UNAVAILABLE",
+            $stateMachine->autoTransitionFrom($stFrom, ["status" => "DNB"])->getState()
+        );
+
+        // Data matching no condition still returns null
+        $this->assertNull($stateMachine->autoTransitionFrom($stFrom, ["fulfilment_number" => 1]));
+
+        // Data matching both is now reported instead of silently resolved
+        $this->expectException(TransitionException::class);
+        $this->expectExceptionMessage(
+            "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
+        );
+        $stateMachine->autoTransitionFrom($stFrom, ["invoice_number" => 10, "status" => "DNB"]);
+    }
+
+    public function testDuplicatedTransitionIsRejectedInSimpleMode(): void
+    {
+        $this->expectException(TransitionException::class);
+        $this->expectExceptionMessage("A transition from A to B is already defined");
+
+        FiniteStateMachine::createMachine(
+            [
+                ["A", "B"],
+                ["A", "B"],
+            ]
         );
     }
 }

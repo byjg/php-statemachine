@@ -17,9 +17,11 @@ class TransitionTest extends TestCase
         $transition = Transition::create($state1, $state2);
 
         // Sanity Test
-        $this->assertSame($state1, $transition->getCurrentState());
-        $this->assertEquals($state2, $transition->getDesiredState());  // The state is equal
-        $this->assertNotSame($state2, $transition->getDesiredState()); // However, they aren't the same object
+        // Both accessors hand back a copy, so the caller cannot mutate the transition
+        $this->assertEquals($state1, $transition->getCurrentState());   // The state is equal
+        $this->assertNotSame($state1, $transition->getCurrentState());  // However, they aren't the same object
+        $this->assertEquals($state2, $transition->getDesiredState());   // The state is equal
+        $this->assertNotSame($state2, $transition->getDesiredState());  // However, they aren't the same object
         $this->assertNull($transition->getDesiredState()->getData());
 
         // Get State with Data

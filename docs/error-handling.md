@@ -31,6 +31,19 @@ try {
 }
 ```
 
+### With transition()
+
+`transition()` returns `null` when the move is not declared or its condition denies it. With
+exceptions enabled it throws instead:
+
+```php
+try {
+    $stateMachine->transition($stB, $stA);
+} catch (TransitionException $e) {
+    echo $e->getMessage(); // "Cannot transition from B to A"
+}
+```
+
 ### With autoTransitionFrom()
 
 When exceptions are enabled, `autoTransitionFrom()` will throw a `TransitionException` if no valid transition is found:
@@ -42,6 +55,32 @@ try {
     echo $e->getMessage(); // "There is not possible transitions from __VOID__ with the data provided"
 }
 ```
+
+## Ambiguous Transitions
+
+`throwErrorIfCannotTransition()` covers the case where *no* transition matches. The opposite
+case — data matching *several* transitions — is not an error by default: `autoTransitionFrom()`
+takes the first transition declared that matches.
+
+Enable `throwErrorIfAmbiguousTransition()` when your conditions are meant to be mutually
+exclusive and you would rather hear about an overlap than depend on declaration order:
+
+```php
+$stateMachine = FiniteStateMachine::createMachine()
+    ->addTransition($transitionRequested)
+    ->addTransition($transitionUnavailable)
+    ->throwErrorIfAmbiguousTransition();
+
+try {
+    $stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "status" => "DNB"]);
+} catch (TransitionException $e) {
+    // "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
+    echo $e->getMessage();
+}
+```
+
+The two options are independent and can be combined. See
+[Auto Transition](auto-transition.md) for the evaluation order this protects you from.
 
 ## Exception Class
 

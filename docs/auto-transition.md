@@ -76,41 +76,132 @@ $stateMachine->autoTransitionFrom($stInitial, ["qty" => 0, "min_stock" => 20]); 
 
 When auto transitioned, the state object returned has the `->getData()` method with the data used to validate it.
 
-## Processing State with Actions
+## Evaluation Order
 
-You can also create a state with an action that will execute when the state is reached.
+The transitions leaving the current state are evaluated **in the order they were added to
+the machine**, and the **first** one whose condition returns `true` wins. Evaluation stops
+there — the remaining conditions are not called.
 
-### State Actions vs Transition Conditions
-
-There are two types of interfaces in the state machine:
-
-1. **TransitionConditionInterface** - Added to `Transition`, the `canTransition()` method returns `true`/`false` to allow/deny the transition
-2. **StateActionInterface** - Added to `State`, the `execute()` method executes side effects when `$state->process()` is called
-
-Example:
+This matters when two conditions can be satisfied by the same data. In the example above
+the three conditions are mutually exclusive by construction (`qty == 0`, `0 < qty < min_stock`,
+`qty >= min_stock`), so exactly one can match and the order is irrelevant. Conditions that
+look at different keys are much easier to overlap by accident:
 
 ```php
-use ByJG\StateMachine\StateActionInterface;
-
-// Create a state action
-$action = new class implements StateActionInterface {
-    public function execute(?array $data): void {
-        // Execute some operation with the data
-        // This is the STATE action, not the transition condition
-        echo "Processing state with data: " . json_encode($data);
+$requested = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return isset($data["invoice_number"]);
     }
 };
 
-// Create a state with the action
-$stN = new State('SOMESTATE', $action);
+$unavailable = new class implements TransitionConditionInterface {
+    public function canTransition(?array $data): bool {
+        return isset($data["status"]);
+    }
+};
+```
 
-// After autoTransition returns the state object
-// You can execute its action:
+Given `["invoice_number" => 10, "status" => "DNB"]` both conditions are `true`, and the
+result is whichever transition was added first.
 
-$resultState = $stateMachine->autoTransitionFrom('STATE', [... data ...]);
-$resultState->process(); // This will run the state's action with the data
+### Detecting Ambiguity
+
+If your conditions are meant to be mutually exclusive, use `throwErrorIfAmbiguousTransition()`
+to be told when they are not, instead of silently getting the first declaration:
+
+```php
+$stateMachine = FiniteStateMachine::createMachine()
+    ->addTransition($transitionRequested)
+    ->addTransition($transitionUnavailable)
+    ->throwErrorIfAmbiguousTransition();
+
+// Throws TransitionException:
+// "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
+$stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "status" => "DNB"]);
+```
+
+Data matching exactly one transition still transitions normally, and data matching none
+still returns `null` (or throws, if `throwErrorIfCannotTransition()` is also enabled).
+
+:::warning
+This option evaluates **every** condition of the current state instead of stopping at the
+first match. That is safe only because `canTransition()` is expected to be a pure test —
+keep side effects out of your conditions and put them in `TransitionActionInterface` instead.
+:::
+
+## Processing Transitions with Actions
+
+A transition can carry an action implementing `TransitionActionInterface`. It runs when you
+call `process()` on the state the transition produced:
+
+```php
+use ByJG\StateMachine\TransitionActionInterface;
+
+$notifyResupply = new class implements TransitionActionInterface {
+    public function execute(State $from, State $to, ?array $data): void {
+        echo "moved {$from} -> {$to} with " . json_encode($data);
+    }
+};
+
+$transition = Transition::create($stLastUnits, $stRequested, $requestedCondition, $notifyResupply);
+```
+
+```php
+$resultState = $stateMachine->autoTransitionFrom($stLastUnits, [... data ...]);
+
+$repository->save($entity, $resultState);   // commit the move first
+$resultState->process();                    // then run the transition action
 ```
 
 :::tip
-The data used to validate the transition is automatically stored in the returned state and passed to the `execute()` method via `process()`.
+The data used to validate the transition is stored in the returned state and passed to
+`execute()` via `process()`. `$to->getData()` returns the same array.
 :::
+
+### Actions Belong to the Transition, Not the State
+
+This is the point of the design. Consider a state `C` reachable from both `A` and `B`, where
+each route must do something different:
+
+```php
+$stateMachine = FiniteStateMachine::createMachine()
+    ->addTransition(Transition::create($stA, $stC, null, $viaAAction))
+    ->addTransition(Transition::create($stB, $stC, null, $viaBAction));
+
+$stateMachine->autoTransitionFrom($stA, $data)->process();   // runs $viaAAction only
+$stateMachine->autoTransitionFrom($stB, $data)->process();   // runs $viaBAction only
+```
+
+There is one `C`. No `C_VIA_A`/`C_VIA_B` split, and no `if` inside the action asking where it
+came from — although `$from` and `$to` are available if you want to log the route.
+
+When the side effect is the same on every route into a state, declare it once with
+`createMultiple()`, which attaches one action to every inbound transition:
+
+```php
+Transition::createMultiple([$stA, $stB, $stX], $stC, $condition, $arrivalAction);
+```
+
+:::info
+Because the action lives on the transition, `$stateMachine->state('C')->process()` does
+nothing: that state was not reached by anything, so there is no transition to run. Use
+`transition()` or `autoTransitionFrom()` to obtain a state that can be processed.
+:::
+
+## Performing a Transition Explicitly
+
+`autoTransitionFrom()` picks the target for you. When you already know both ends, use
+`transition()` — it validates the condition and returns the state reached, stamped with the
+transition it came through:
+
+```php
+$next = $stateMachine->transition($stLastUnits, $stRequested, ["invoice_number" => 10]);
+
+if ($next !== null) {
+    $repository->save($entity, $next);
+    $next->process();
+}
+```
+
+It returns `null` when the transition is not declared or its condition denies the move, and
+throws `TransitionException` instead if `throwErrorIfCannotTransition()` is enabled.

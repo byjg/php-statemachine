@@ -15,4 +15,12 @@
             <directory name="vendor" />
         </ignoreFiles>
     </projectFiles>
+
+    <issueHandlers>
+        <!--
+            The fluent methods return `static` rather than `self` precisely so the classes
+            can be extended. Making them final is a deliberate non-goal.
+        -->
+        <ClassMustBeFinal errorLevel="suppress" />
+    </issueHandlers>
 </psalm>

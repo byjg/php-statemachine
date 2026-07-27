@@ -3,7 +3,7 @@
 namespace Tests;
 
 use ByJG\StateMachine\State;
-use ByJG\StateMachine\StateActionInterface;
+use ByJG\StateMachine\TransitionActionInterface;
 use PHPUnit\Framework\TestCase;
 
 class StateTest extends TestCase
@@ -16,43 +16,79 @@ class StateTest extends TestCase
         // Sanity Test
         $this->assertEquals('MY_STATE', $state->getState());
         $this->assertNull($state->getData());
-
+        $this->assertNull($state->getPreviousState());
 
         // Nothing should happen
         $state->process();
     }
 
-    public function testStateAction(): void
+    public function testStateIsCaseInsensitive(): void
     {
-        $varControl = null;
+        $this->assertEquals('MY_STATE', (new State('my_state'))->getState());
+        $this->assertEquals('MY_STATE', (string)new State('My_State'));
+    }
 
-        $action = new class($varControl) implements StateActionInterface {
-            private $varControl;
+    /**
+     * A state that was not produced by a transition has nothing to run.
+     */
+    public function testProcessIsNoOpWithoutATransition(): void
+    {
+        $state = new State('MY_STATE');
+        $state->setData(['value']);
 
-            public function __construct(&$varControl) {
-                $this->varControl = &$varControl;
+        $this->assertEquals(['value'], $state->getData());
+        $this->assertNull($state->getPreviousState());
+
+        // No transition was taken, so there is no action to run
+        $state->process();
+    }
+
+    public function testProcessRunsTheActionOfTheTransitionTaken(): void
+    {
+        $received = [];
+
+        $action = new class($received) implements TransitionActionInterface {
+            private array $received;
+
+            public function __construct(array &$received) {
+                $this->received = &$received;
             }
 
             #[\Override]
-            public function execute(?array $data): void {
-                $this->varControl = $data;
+            public function execute(State $from, State $to, ?array $data): void {
+                $this->received = [
+                    'from' => $from->getState(),
+                    'to' => $to->getState(),
+                    'data' => $data,
+                ];
             }
         };
 
-        $state = new State('MY_STATE', $action);
-
-        // Sanity Tests
-        $this->assertEquals('MY_STATE', $state->getState());
-        $this->assertNull($varControl);
-
-        // Call process wont change anything because there is no data
-        $state->process();
-        $this->assertNull($varControl);
-
-        // After set, should get the proper value.
+        $state = new State('TO_STATE');
         $state->setData(['value']);
-        $this->assertEquals(['value'], $state->getData());
+        $state->arrivedThrough(new State('FROM_STATE'), $action);
+
+        $this->assertEquals('FROM_STATE', $state->getPreviousState()->getState());
+        $this->assertEquals([], $received);
+
         $state->process();
-        $this->assertEquals(['value'], $varControl);
+
+        $this->assertEquals(
+            ['from' => 'FROM_STATE', 'to' => 'TO_STATE', 'data' => ['value']],
+            $received
+        );
+    }
+
+    /**
+     * A transition without an action is legal; arriving through it must not blow up.
+     */
+    public function testProcessIsNoOpWhenTheTransitionHasNoAction(): void
+    {
+        $state = new State('TO_STATE');
+        $state->arrivedThrough(new State('FROM_STATE'), null);
+
+        $this->assertEquals('FROM_STATE', $state->getPreviousState()->getState());
+
+        $state->process();
     }
 }
