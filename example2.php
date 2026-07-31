@@ -1,73 +1,125 @@
 <?php
 
+use ByJG\Serializer\Serialize;
 use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
-use ByJG\StateMachine\Transition;
+use ByJG\StateMachine\TransitionActionInterface;
+use ByJG\StateMachine\TransitionConditionInterface;
 
 require __DIR__ . "/vendor/autoload.php";
 
-$stInitial = new State("__VOID__", function ($data) { echo "Void state - " . print_r($data, true); });
-$stInStock = new State("IN_STOCK", function ($data) { echo "In stock - " . print_r($data, true); });
-$stLastUnits = new State("LAST_UNITS", function ($data) { echo "Last Units - " . print_r($data, true); });
-$stOutOfStock = new State("OUT_OF_STOCK", function ($data) { echo "out of Stock - " . print_r($data, true); });
-// ----
-$stNotRequested = new State("NOT_REQUESTED", function ($data) { echo "Not Requested - " . print_r($data, true); });
-$stRequested = new State("REQUESTED_RESUPPLY", function ($data) { echo "Requested Supply - " . print_r($data, true); });
-$stResupplied = new State("RESUPPLIED", function ($data) { echo "Ressuoplied - " . print_r($data, true); });
-$stUnavailable = new State("UNAVAILABLE", function ($data) { echo "Unavailable - " . print_r($data, true); });
+/**
+ * The rules named by example2.yaml. Each one is a class, so each one can be unit tested,
+ * type checked and debugged — which is why the definition names classes instead of carrying
+ * expressions such as "qty >= min_stock" as strings.
+ */
+class InStock implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return $data["qty"] >= $data["min_stock"];
+    }
+}
 
-$transitionInStock = Transition::create($stInitial, $stInStock, function ($data) {
-    return $data["qty"] >= $data["min_stock"];
-});
+class LastUnits implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
+    }
+}
 
-$transitionLastUnits = Transition::create($stInitial, $stLastUnits, function ($data) {
-    return $data["qty"] > 0 && $data["qty"] < $data["min_stock"];
-});
-$transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, function($data) {
-    return $data["qty"] == 0;
-});
+class OutOfStock implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return $data["qty"] == 0;
+    }
+}
 
-$stateMachine = FiniteStateMachine::createMachine()
-    ->addTransition($transitionInStock)
-    ->addTransition($transitionLastUnits)
-    ->addTransition($transitionOutOfStock);
+class NothingRequested implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return !isset($data["invoice_number"]) && !isset($data["status"]);
+    }
+}
 
+class ResupplyRequested implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
+    }
+}
 
-echo "\n\nTransitions\n";
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])->process();
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])->process();
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])->process();
+class Fulfilled implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return isset($data["fulfilment_number"]);
+    }
+}
 
+class Discontinued implements TransitionConditionInterface
+{
+    #[\Override]
+    public function canTransition(?array $data): bool
+    {
+        return isset($data["status"]);
+    }
+}
 
-$transitionNotRequested = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stNotRequested, function ($data) {
-    return !isset($data["invoice_number"]) && !isset($data["status"]);
-});
+/**
+ * One action, named by every transition in the file.
+ *
+ * Receiving both ends of the move is what makes a single object reusable like this: the
+ * announcement knows where it came from without a separate class per destination. The machine
+ * builds it once and shares that instance across all of them.
+ */
+class Announce implements TransitionActionInterface
+{
+    #[\Override]
+    public function execute(State $from, State $to, ?array $data): void
+    {
+        echo "  {$from} -> {$to} " . json_encode($data) . "\n";
+    }
+}
 
-$transitionRequested = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stRequested, function ($data) {
-    return isset($data["invoice_number"]) && !isset($data["fulfilment_number"]);
-});
+$definition = Serialize::fromYaml((string)file_get_contents(__DIR__ . "/example2.yaml"))->toArray();
 
-$transitionResupplied = Transition::createMultiple([$stLastUnits, $stOutOfStock, $stRequested], $stResupplied, function ($data) {
-    return isset($data["fulfilment_number"]);
-});
+$stockMachine = FiniteStateMachine::fromDefinition($definition["stock"]);
+$resupplyMachine = FiniteStateMachine::fromDefinition($definition["resupply"]);
 
-$transitionUnavailable = Transition::createMultiple([$stLastUnits, $stOutOfStock], $stUnavailable, function ($data) {
-    return isset($data["status"]);
-});
+$stVoid = $stockMachine->state("__VOID__");
+$stLastUnits = $resupplyMachine->state("LAST_UNITS");
 
+// IN_STOCK is a state of the first machine, not of the second one. Asking the resupply machine
+// for it would return null, so it is built directly to show what happens when a machine is
+// handed a state it does not know: nothing is reachable.
+$stInStock = new State("IN_STOCK");
 
-$secondMachine = FiniteStateMachine::createMachine()
-    ->addTransitions($transitionNotRequested)
-    ->addTransitions($transitionRequested)
-    ->addTransitions($transitionResupplied)
-    ->addTransitions($transitionUnavailable);
+echo "Where the product sits\n";
+foreach ([["qty" => 10, "min_stock" => 20], ["qty" => 30, "min_stock" => 20], ["qty" => 0, "min_stock" => 20]] as $data) {
+    // The machine decides; the caller decides when it happened. In real code the new state
+    // would be persisted here, before process() runs the side effect.
+    $stockMachine->autoTransitionFrom($stVoid, $data)?->process();
+}
 
-echo "\n\nTransitions 2\n";
-var_dump($secondMachine->autoTransitionFrom($stInStock, []));
-$secondMachine->autoTransitionFrom($stLastUnits, [])->process();
-$secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])->process();
-$secondMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])->process();
-$secondMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->process();
+echo "\nWhat is being done about it\n";
+// IN_STOCK has no outgoing transition in this machine, so there is nowhere to go.
+var_dump($resupplyMachine->autoTransitionFrom($stInStock, []));
 
-echo "\n\nGet state\n";
-var_dump($secondMachine->state('NOT_REQUESTED'));
+$resupplyMachine->autoTransitionFrom($stLastUnits, [])?->process();
+$resupplyMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])?->process();
+$resupplyMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])?->process();
+$resupplyMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])?->process();
+
+echo "\nGet state\n";
+var_dump($resupplyMachine->state("NOT_REQUESTED"));

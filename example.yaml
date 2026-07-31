@@ -1,0 +1,18 @@
+# The graph of example.php.
+#
+#   A --> B --> D (only when there is data)
+#   A --> C
+#
+# Only `from` and `to` are required. `condition` names a class implementing
+# TransitionConditionInterface; `action` would name a TransitionActionInterface.
+
+transitions:
+  - from: A
+    to: B
+
+  - from: A
+    to: C
+
+  - from: B
+    to: D
+    condition: RequiresData
