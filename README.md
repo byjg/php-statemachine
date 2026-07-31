@@ -24,6 +24,8 @@ Differently from other State machines, this implementation doesn't have an initi
 - [Error Handling](docs/error-handling.md)
 - [Advanced Features](docs/advanced-features.md)
 - [Declarative Definition](docs/declarative-definition.md)
+- [Using with Laravel](docs/using-with-laravel.md)
+- [Using with Symfony](docs/using-with-symfony.md)
 
 ## Basic Example
 
