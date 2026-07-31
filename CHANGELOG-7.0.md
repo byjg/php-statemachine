@@ -40,6 +40,15 @@ lost and the state-splitting workaround goes away.
 - A 4th optional argument for the transition action on `Transition::__construct()`,
   `Transition::create()` and `Transition::createMultiple()`.
 - A 4th slot in the `createMachine()` array form: `['A', 'B', $condition, $action]`.
+- The condition and the action slots also accept the **name of a class** implementing the
+  matching interface, resolved when the machine is built. A second optional argument of
+  `createMachine()` takes a resolver — any `callable(string): object`, so `[$container, 'get']`
+  works — for collaborators that need constructor arguments.
+- `FiniteStateMachine::fromDefinition(array $definition, ?callable $resolver = null)` — builds a
+  machine from a `['transitions' => [['from' => ..., 'to' => ..., 'condition' => ..., 'action' => ...]]]`
+  array, where `from` may be a list to declare the same move out of several states. The
+  definition is a plain array, so YAML/JSON parsing stays outside this package and it keeps
+  requiring nothing but PHP. See [Declarative Definition](docs/declarative-definition.md).
 
 ## Migration
 

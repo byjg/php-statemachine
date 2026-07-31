@@ -10,35 +10,135 @@ class FiniteStateMachine
     /** @var array<string, State> Keyed by the uppercased state name */
     protected array $stateList = [];
 
+    /** @var (callable(string): object)|null Turns a class name into the collaborator it names */
+    protected $resolver = null;
+
+    /** @var array<string, object> Collaborators already built, keyed by class name */
+    protected array $instances = [];
+
     protected bool $throwError = false;
 
     protected bool $throwErrorOnAmbiguity = false;
 
-    public static function createMachine(array $transitionList = []): FiniteStateMachine
+    /**
+     * @param array $transitionList Each entry is [from, to, condition?, action?]. The condition
+     *                              and the action may be instances or the name of a class
+     *                              implementing the matching interface.
+     * @param callable|null $resolver Builds a collaborator from its class name. Defaults to
+     *                                `new $className()`. Pass `[$container, 'get']` to let a
+     *                                PSR-11 container build it instead.
+     * @return FiniteStateMachine
+     * @throws TransitionException If a class name cannot be resolved into the right interface
+     */
+    public static function createMachine(array $transitionList = [], ?callable $resolver = null): FiniteStateMachine
     {
         $stateList = [];
         $stateMachine = new FiniteStateMachine();
-        foreach ($transitionList as $transition) {
-            if (isset($stateList[$transition[0]])) {
-                $st1 = $stateList[$transition[0]];
-            } else {
-                $st1 = new State($transition[0]);
-                $stateList[$transition[0]] = $st1;
-            }
+        $stateMachine->resolver = $resolver;
 
-            if (isset($stateList[$transition[1]])) {
-                $st2 = $stateList[$transition[1]];
-            } else {
-                $st2 = new State($transition[1]);
-                $stateList[$transition[1]] = $st2;
-            }
+        foreach ($transitionList as $transition) {
+            // Keyed by the uppercased name, because that is how State compares itself. Without
+            // it a definition mixing "Draft" and "DRAFT" would build two objects for one state.
+            $st1 = $stateList[strtoupper($transition[0])] ??= new State($transition[0]);
+            $st2 = $stateList[strtoupper($transition[1])] ??= new State($transition[1]);
 
             $stateMachine->addTransition(
-                new Transition($st1, $st2, $transition[2] ?? null, $transition[3] ?? null)
+                new Transition(
+                    $st1,
+                    $st2,
+                    $stateMachine->resolve($transition[2] ?? null, TransitionConditionInterface::class),
+                    $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class)
+                )
             );
         }
 
         return $stateMachine;
+    }
+
+    /**
+     * Builds a machine from a definition that came from outside PHP.
+     *
+     * The definition is a plain array, so the format it was written in is not this package's
+     * concern: parse YAML, JSON or anything else into an array and hand it over.
+     *
+     *     transitions:
+     *       - from: DRAFT
+     *         to: REVIEW
+     *         condition: App\Fsm\HasReviewer
+     *         action: App\Fsm\NotifyReviewer
+     *
+     * `from` also accepts a list, which declares the same move out of several states. It is
+     * the declarative form of Transition::createMultiple():
+     *
+     *     transitions:
+     *       - from: [LAST_UNITS, OUT_OF_STOCK]
+     *         to: RESUPPLIED
+     *         condition: App\Fsm\WasFulfilled
+     *
+     * @param array $definition
+     * @param callable|null $resolver See createMachine()
+     * @return FiniteStateMachine
+     * @throws TransitionException If the definition is malformed or names an unusable class
+     */
+    public static function fromDefinition(array $definition, ?callable $resolver = null): FiniteStateMachine
+    {
+        if (!isset($definition["transitions"]) || !is_array($definition["transitions"])) {
+            throw new TransitionException("The definition must declare a 'transitions' list");
+        }
+
+        $transitionList = [];
+        foreach ($definition["transitions"] as $index => $entry) {
+            if (!is_array($entry) || !isset($entry["from"], $entry["to"])) {
+                throw new TransitionException("The transition #{$index} must declare both 'from' and 'to'");
+            }
+
+            foreach ((array)$entry["from"] as $from) {
+                $transitionList[] = [$from, $entry["to"], $entry["condition"] ?? null, $entry["action"] ?? null];
+            }
+        }
+
+        return static::createMachine($transitionList, $resolver);
+    }
+
+    /**
+     * Passes an instance through, or builds the one a class name refers to.
+     *
+     * Both interfaces receive everything they operate on as arguments, and conditions are
+     * required to be free of side effects, so a single instance per class name is shared by
+     * every transition naming it.
+     *
+     * Resolution happens while the machine is being built, not while it runs: a typo in a
+     * class name fails at startup instead of on the one transition nobody exercised.
+     *
+     * @template T of object
+     * @param class-string<T>|T|null $spec
+     * @param class-string<T> $interface
+     * @return T|null
+     * @throws TransitionException
+     */
+    protected function resolve(object|string|null $spec, string $interface): ?object
+    {
+        if (is_null($spec)) {
+            return null;
+        }
+
+        if (is_string($spec)) {
+            if (!class_exists($spec)) {
+                throw new TransitionException("The class '{$spec}' declared as {$interface} does not exist");
+            }
+
+            $spec = $this->instances[$spec] ??= is_null($this->resolver)
+                ? new $spec()
+                : ($this->resolver)($spec);
+        }
+
+        if (!($spec instanceof $interface)) {
+            throw new TransitionException(
+                get_class($spec) . " must implement {$interface} to be used in a transition"
+            );
+        }
+
+        return $spec;
     }
 
     public function throwErrorIfCannotTransition(): static

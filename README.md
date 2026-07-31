@@ -23,6 +23,7 @@ Differently from other State machines, this implementation doesn't have an initi
 - [Auto Transition](docs/auto-transition.md)
 - [Error Handling](docs/error-handling.md)
 - [Advanced Features](docs/advanced-features.md)
+- [Declarative Definition](docs/declarative-definition.md)
 
 ## Basic Example
 
@@ -111,6 +112,31 @@ $stateMachine = FiniteStateMachine::createMachine(
     ]
 );
 ```
+
+### Defining the State Machine as data
+
+The condition and the action can be named by class instead of instantiated, which lets the
+whole graph live outside the code — in a YAML file, for instance:
+
+```yaml
+transitions:
+  - from: DRAFT
+    to: REVIEW
+    condition: 'App\Fsm\HasReviewer'
+    action: 'App\Fsm\NotifyReviewer'
+
+  - from: [REVIEW, PUBLISHED]
+    to: ARCHIVED
+```
+
+```php
+$stateMachine = FiniteStateMachine::fromDefinition(
+    Serialize::fromYaml(file_get_contents('machine.yaml'))->toArray()
+);
+```
+
+The definition is a plain array, so this component needs no parser of its own. See
+[Declarative Definition](docs/declarative-definition.md).
 
 ## Using the Auto Transition
 
