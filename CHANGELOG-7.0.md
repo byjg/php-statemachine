@@ -110,26 +110,10 @@ These throw whether or not `throwErrorIfCannotTransition()` is enabled. That fla
 machine reports a move it *disallows*; a state that does not exist is not a move it disallowed,
 it is a mistake in the caller.
 
-### Migrating
+### In a definition file
 
-```php
-// 6.x / early 7.0
-$stA = new State('A');
-$stB = new State('B');
-$machine = FiniteStateMachine::createMachine()->addTransition(new Transition($stA, $stB));
-$machine->canTransition($stA, $stB);
-
-// 7.0
-enum Letter: string { case A = 'A'; case B = 'B'; }
-$machine = FiniteStateMachine::createMachine(Letter::class)
-    ->addTransition(new Transition(Letter::A, Letter::B));
-$machine->canTransition(Letter::A, Letter::B);
-```
-
-`Transition`, `Transition::create()` and `Transition::createMultiple()` take the same three
-forms, so `new State()` disappears from calling code entirely.
-
-A definition file now names its enum, which is what lets the file be hand-written safely:
+A definition names its enum, which is what lets the file be hand-written safely — every `from`
+and `to` in it must be one of the cases:
 
 ```yaml
 enum: 'App\Fsm\OrderState'
@@ -150,6 +134,49 @@ be trusted. Choosing predictability is what makes the rest of the guarantees pos
 
 ## Migration
 
+Every example below is written against this enum, which is the first thing to add when
+migrating: the states you already have, declared once.
+
+```php
+enum Letter: string
+{
+    case A = 'A';
+    case B = 'B';
+    case C = 'C';
+}
+```
+
+### Building the machine
+
+The machine is bound to the enum, and states are named by its cases rather than by `State`
+objects you construct:
+
+```php
+// 6.x
+$stA = new State('A');
+$stB = new State('B');
+
+$machine = FiniteStateMachine::createMachine()
+    ->addTransition(new Transition($stA, $stB));
+
+$machine->canTransition($stA, $stB);
+$machine->isFinalState($stB);
+
+// 7.0
+$machine = FiniteStateMachine::createMachine(Letter::class)
+    ->addTransition(new Transition(Letter::A, Letter::B));
+
+$machine->canTransition(Letter::A, Letter::B);
+$machine->isFinalState(Letter::B);
+```
+
+`Transition`, `Transition::create()` and `Transition::createMultiple()` take the same forms, so
+`new State()` disappears from calling code entirely.
+
+The string a case corresponds to works everywhere a case does — `'A'`, `'a'` and `Letter::A` are
+one state — which is what lets a machine defined in a file be queried with the enum. Prefer the
+case in code you write by hand: it cannot be misspelled.
+
 ### A state action that was the same on every route in
 
 Attach the action to every inbound transition. `createMultiple()` does this in one call:
@@ -161,9 +188,10 @@ $machine->addTransition(new Transition($stA, $stC));
 $machine->addTransition(new Transition($stB, $stC));
 
 // 7.0
-$machine->addTransitions(
-    Transition::createMultiple([Letter::A, Letter::B], Letter::C, null, $arrivalAction)
-);
+$machine = FiniteStateMachine::createMachine(Letter::class)
+    ->addTransitions(
+        Transition::createMultiple([Letter::A, Letter::B], Letter::C, null, $arrivalAction)
+    );
 ```
 
 ### A state action that branched on where it came from
@@ -179,8 +207,9 @@ $stC = new State('C', new class implements StateActionInterface {
 });
 
 // 7.0
-$machine->addTransition(Transition::create(Letter::A, Letter::C, null, $viaAAction));
-$machine->addTransition(Transition::create(Letter::B, Letter::C, null, $viaBAction));
+$machine = FiniteStateMachine::createMachine(Letter::class)
+    ->addTransition(Transition::create(Letter::A, Letter::C, null, $viaAAction))
+    ->addTransition(Transition::create(Letter::B, Letter::C, null, $viaBAction));
 ```
 
 ### The action signature
@@ -213,10 +242,29 @@ $audit = new class implements TransitionActionInterface {
 anything. Obtain the state from the move itself:
 
 ```php
+// 6.x
+$fsm->state('C')->process();
+
 // 7.0
-$next = $fsm->transition($current, Letter::C, $data);   // or autoTransitionFrom()
+$next = $fsm->transition(Letter::A, Letter::C, $data);   // or autoTransitionFrom()
 $next?->process();
 ```
+
+### Code that asked about a state the machine does not have
+
+There was no way to be told before, so this is the one place a working 6.x call can become an
+exception rather than a different answer:
+
+```php
+// 6.x — answered, wrongly
+$machine->isFinalState(new State('TYPOO'));   // true: nothing leaves a state nobody declared
+$machine->state('TYPOO');                     // null
+
+// 7.0 — TransitionException in both cases
+```
+
+If you were relying on `state()` returning `null` as an existence check, the check is no longer
+needed: every case of the enum is a state of the machine, and anything else is a mistake.
 
 ## Unchanged
 
