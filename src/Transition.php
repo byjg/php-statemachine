@@ -25,33 +25,39 @@ class Transition
     protected ?TransitionActionInterface $transitionAction;
 
     /**
-     * @param State $currentState
-     * @param State $desiredState
+     * Both ends are named by an enum case, the string it corresponds to, or a State.
+     *
+     * The names are normalised here but not validated: a Transition on its own has no enum to
+     * check them against. FiniteStateMachine::addTransition() rejects any end that is not one
+     * of its states, which is where a typo in a declaration is caught.
+     *
+     * @param string|\UnitEnum|State $currentState
+     * @param string|\UnitEnum|State $desiredState
      * @param TransitionConditionInterface|null $transitionCondition
      * @param TransitionActionInterface|null $transitionAction
      */
     public function __construct(
-        State $currentState,
-        State $desiredState,
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
         ?TransitionConditionInterface $transitionCondition = null,
         ?TransitionActionInterface $transitionAction = null
     ) {
-        $this->currentState = $currentState;
-        $this->desiredState = $desiredState;
+        $this->currentState = new State(State::nameOf($currentState));
+        $this->desiredState = new State(State::nameOf($desiredState));
         $this->transitionCondition = $transitionCondition;
         $this->transitionAction = $transitionAction;
     }
 
     /**
-     * @param State $currentState
-     * @param State $desiredState
+     * @param string|\UnitEnum|State $currentState
+     * @param string|\UnitEnum|State $desiredState
      * @param TransitionConditionInterface|null $transitionCondition
      * @param TransitionActionInterface|null $transitionAction
      * @return Transition
      */
     public static function create(
-        State $currentState,
-        State $desiredState,
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
         ?TransitionConditionInterface $transitionCondition = null,
         ?TransitionActionInterface $transitionAction = null
     ): Transition {
@@ -64,15 +70,15 @@ class Transition
      * This is how a side effect that must happen on every way into a state is declared
      * once instead of being repeated per transition.
      *
-     * @param State[] $currentState
-     * @param State $desiredState
+     * @param array<string|\UnitEnum|State> $currentState
+     * @param string|\UnitEnum|State $desiredState
      * @param TransitionConditionInterface|null $transitionCondition
      * @param TransitionActionInterface|null $transitionAction
      * @return Transition[]
      */
     public static function createMultiple(
         array $currentState,
-        State $desiredState,
+        string|\UnitEnum|State $desiredState,
         ?TransitionConditionInterface $transitionCondition = null,
         ?TransitionActionInterface $transitionAction = null
     ): array {

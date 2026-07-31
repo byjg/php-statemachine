@@ -8,15 +8,17 @@ use ByJG\StateMachine\Transition;
 use ByJG\StateMachine\TransitionConditionInterface;
 use ByJG\StateMachine\TransitionException;
 use PHPUnit\Framework\TestCase;
+use Tests\Fixture\Letter;
+use Tests\Fixture\Stock;
 
 class FiniteStateMachineTest extends TestCase
 {
     public function testCanTransition(): void
     {
-        $stA = new State("A");
-        $stB = new State("B");
-        $stC = new State("C");
-        $stD = new State("D");
+        $stA = Letter::A;
+        $stB = Letter::B;
+        $stC = Letter::C;
+        $stD = Letter::D;
 
         $transitionAB = new Transition($stA, $stB);
         $transitionAC = new Transition($stA, $stC);
@@ -29,7 +31,7 @@ class FiniteStateMachineTest extends TestCase
         };
         $transitionBD = new Transition($stB, $stD, $condition);
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             //    ->throwErrorIfCannotTransition()
             ->addTransition($transitionAB)
             ->addTransitions([$transitionAC, $transitionBD]);
@@ -56,34 +58,29 @@ class FiniteStateMachineTest extends TestCase
         };
 
         $stateMachine = FiniteStateMachine::createMachine(
+            Letter::class,
             [
                 ["A", "B"],
                 ["A", "C"],
                 ["B", "D", $condition]
             ]
-            );
+        );
 
         $this->canTransitionAssertions($stateMachine);
     }
 
     protected function canTransitionAssertions($stateMachine): void
     {
-        $stA = new State("A");
-        $stB = new State("B");
-        $stC = new State("C");
-        $stD = new State("D");
+        $stA = Letter::A;
+        $stB = Letter::B;
+        $stC = Letter::C;
+        $stD = Letter::D;
 
-        $this->assertEquals($stA, $stateMachine->state('A'));
-        $this->assertEquals($stB, $stateMachine->state('B'));
-        $this->assertEquals($stC, $stateMachine->state('C'));
-        $this->assertEquals($stD, $stateMachine->state('D'));
-        $this->assertNull($stateMachine->state('NO'));
-        $this->assertEquals($stA, $stateMachine->state('a'));
-        $this->assertEquals($stB, $stateMachine->state('b'));
-        $this->assertEquals($stC, $stateMachine->state('c'));
-        $this->assertEquals($stD, $stateMachine->state('d'));
-
-
+        // A case and the string it corresponds to name the same state, whatever its case
+        $this->assertEquals('A', $stateMachine->state(Letter::A)->getState());
+        $this->assertEquals('B', $stateMachine->state('B')->getState());
+        $this->assertEquals('C', $stateMachine->state('c')->getState());
+        $this->assertEquals('D', $stateMachine->state('d')->getState());
 
         $this->assertTrue($stateMachine->canTransition($stA, $stateMachine->state('B')));
         $this->assertTrue($stateMachine->canTransition($stA, $stC));
@@ -106,10 +103,10 @@ class FiniteStateMachineTest extends TestCase
 
     public function testAutoTransition(): void
     {
-        $stInitial = new State("__VOID__");
-        $stInStock = new State("IN_STOCK");
-        $stLastUnits = new State("LAST_UNITS");
-        $stOutOfStock = new State("OUT_OF_STOCK");
+        $stInitial = Stock::Start;
+        $stInStock = Stock::InStock;
+        $stLastUnits = Stock::LastUnits;
+        $stOutOfStock = Stock::OutOfStock;
 
         $inStockCondition = new class implements TransitionConditionInterface {
             #[\Override]
@@ -136,21 +133,21 @@ class FiniteStateMachineTest extends TestCase
         $transitionLastUnits = Transition::create($stInitial, $stLastUnits, $lastUnitsCondition);
         $transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, $outOfStockCondition);
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Stock::class)
             ->addTransition($transitionInStock)
             ->addTransition($transitionLastUnits)
             ->addTransition($transitionOutOfStock);
 
         $this->assertEquals(
-            $stLastUnits->getState(),
+            $stLastUnits->value,
             $stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20])->getState()
         );
         $this->assertEquals(
-            $stInStock->getState(),
+            $stInStock->value,
             $stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20])->getState()
         );
         $this->assertEquals(
-            $stOutOfStock->getState(),
+            $stOutOfStock->value,
             $stateMachine->autoTransitionFrom($stInitial, ["qty" => 00, "min_stock" => 20])->getState()
         );
 
@@ -163,13 +160,13 @@ class FiniteStateMachineTest extends TestCase
 
     public function testAutoTransition_2(): void
     {
-        $stLastUnits = new State("LAST_UNITS");
-        $stOutOfStock = new State("OUT_OF_STOCK");
+        $stLastUnits = Stock::LastUnits;
+        $stOutOfStock = Stock::OutOfStock;
 
-        $stNotRequested = new State("NOT_REQUESTED");
-        $stRequested = new State("REQUESTED_RESUPPLY");
-        $stResupplied = new State("RESUPPLIED");
-        $stUnavailable = new State("UNAVAILABLE");
+        $stNotRequested = Stock::NotRequested;
+        $stRequested = Stock::RequestedResupply;
+        $stResupplied = Stock::Resupplied;
+        $stUnavailable = Stock::Unavailable;
 
         $notRequestedCondition = new class implements TransitionConditionInterface {
             #[\Override]
@@ -223,29 +220,29 @@ class FiniteStateMachineTest extends TestCase
             $unavailableCondition
         );
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Stock::class)
             ->addTransitions($transitionNotRequested)
             ->addTransitions($transitionRequested)
             ->addTransitions($transitionResupplied)
             ->addTransitions($transitionUnavailable);
 
         $this->assertEquals(
-            $stNotRequested->getState(),
+            $stNotRequested->value,
             $stateMachine->autoTransitionFrom($stLastUnits, [])->getState()
         );
         $this->assertEquals(
-            $stRequested->getState(),
+            $stRequested->value,
             $stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])->getState()
         );
         $this->assertEquals(
-            $stResupplied->getState(),
+            $stResupplied->value,
             $stateMachine->autoTransitionFrom(
                 $stLastUnits,
                 ["invoice_number" => 10, "fulfilment_number" => 50]
             )->getState()
         );
         $this->assertEquals(
-            $stUnavailable->getState(),
+            $stUnavailable->value,
             $stateMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])->getState()
         );
     }
@@ -258,13 +255,14 @@ class FiniteStateMachineTest extends TestCase
     public function testInitialAndFinalStateIgnoreAttachedData(): void
     {
         $stateMachine = FiniteStateMachine::createMachine(
+            Letter::class,
             [
                 ["A", "B"],
                 ["B", "C"],
             ]
         );
 
-        $stA = $stateMachine->state('A');
+        $stA = $stateMachine->state(Letter::A);
         $stB = $stateMachine->autoTransitionFrom($stA, ["qty" => 10]);
 
         // Sanity: we got B and it is carrying the data
@@ -285,8 +283,8 @@ class FiniteStateMachineTest extends TestCase
         $this->assertFalse($stateMachine->isInitialState($stC));
         $this->assertTrue($stateMachine->isFinalState($stC));
 
-        // A is reached with data attached by hand and is genuinely initial
-        $detachedA = new State("A");
+        // A carrying data attached by the caller is genuinely initial
+        $detachedA = $stateMachine->state(Letter::A);
         $detachedA->setData(["qty" => 10]);
         $this->assertTrue($stateMachine->isInitialState($detachedA));
         $this->assertFalse($stateMachine->isFinalState($detachedA));
@@ -299,6 +297,7 @@ class FiniteStateMachineTest extends TestCase
     public function testMachineStatesAreNotMutableByTheCaller(): void
     {
         $stateMachine = FiniteStateMachine::createMachine(
+            Letter::class,
             [
                 ["A", "B"],
             ]
@@ -333,10 +332,10 @@ class FiniteStateMachineTest extends TestCase
             }
         };
 
-        $stA = new State("A");
-        $stB = new State("B");
+        $stA = Letter::A;
+        $stB = Letter::B;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(new Transition($stA, $stB, $never));
 
         $this->expectException(TransitionException::class);
@@ -364,16 +363,16 @@ class FiniteStateMachineTest extends TestCase
             }
         };
 
-        $stFrom = new State("LAST_UNITS");
-        $stRequested = new State("REQUESTED_RESUPPLY");
-        $stUnavailable = new State("UNAVAILABLE");
+        $stFrom = Stock::LastUnits;
+        $stRequested = Stock::RequestedResupply;
+        $stUnavailable = Stock::Unavailable;
 
         $transitions = [
             Transition::create($stFrom, $stRequested, $requested),
             Transition::create($stFrom, $stUnavailable, $unavailable),
         ];
 
-        return FiniteStateMachine::createMachine()
+        return FiniteStateMachine::createMachine(Stock::class)
             ->addTransitions($requestedFirst ? $transitions : array_reverse($transitions));
     }
 
@@ -384,7 +383,7 @@ class FiniteStateMachineTest extends TestCase
     public function testAutoTransitionUsesFirstDeclaredMatch(): void
     {
         $data = ["invoice_number" => 10, "status" => "DNB"];
-        $stFrom = new State("LAST_UNITS");
+        $stFrom = Stock::LastUnits;
 
         $this->assertEquals(
             "REQUESTED_RESUPPLY",
@@ -399,7 +398,7 @@ class FiniteStateMachineTest extends TestCase
 
     public function testAutoTransitionDetectsAmbiguityWhenEnabled(): void
     {
-        $stFrom = new State("LAST_UNITS");
+        $stFrom = Stock::LastUnits;
         $stateMachine = $this->ambiguousMachine(true)->throwErrorIfAmbiguousTransition();
 
         // Data matching a single condition still transitions normally
@@ -429,6 +428,7 @@ class FiniteStateMachineTest extends TestCase
         $this->expectExceptionMessage("A transition from A to B is already defined");
 
         FiniteStateMachine::createMachine(
+            Letter::class,
             [
                 ["A", "B"],
                 ["A", "B"],

@@ -5,8 +5,36 @@ use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\TransitionActionInterface;
 use ByJG\StateMachine\TransitionConditionInterface;
+use ByJG\StateMachine\TransitionException;
 
 require __DIR__ . "/vendor/autoload.php";
+
+/**
+ * Every state either machine can be in. Two machines share this enum: the first decides where a
+ * product sits, the second what is being done about it, and both are the same lifecycle.
+ */
+enum Product: string
+{
+    case Start = '__VOID__';
+    case InStock = 'IN_STOCK';
+    case LastUnits = 'LAST_UNITS';
+    case OutOfStock = 'OUT_OF_STOCK';
+    case NotRequested = 'NOT_REQUESTED';
+    case RequestedResupply = 'REQUESTED_RESUPPLY';
+    case Resupplied = 'RESUPPLIED';
+    case Unavailable = 'UNAVAILABLE';
+}
+
+/**
+ * A perfectly good enum that names something else entirely.
+ *
+ * A case of it satisfies every type declaration the machine could write down, so nothing but
+ * the machine — which knows Product is its enum — can tell that it is the wrong one.
+ */
+enum Warehouse: string
+{
+    case Aisle = 'AISLE';
+}
 
 /**
  * The rules named by example2.yaml. Each one is a class, so each one can be unit tested,
@@ -97,29 +125,28 @@ $definition = Serialize::fromYaml((string)file_get_contents(__DIR__ . "/example2
 $stockMachine = FiniteStateMachine::fromDefinition($definition["stock"]);
 $resupplyMachine = FiniteStateMachine::fromDefinition($definition["resupply"]);
 
-$stVoid = $stockMachine->state("__VOID__");
-$stLastUnits = $resupplyMachine->state("LAST_UNITS");
-
-// IN_STOCK is a state of the first machine, not of the second one. Asking the resupply machine
-// for it would return null, so it is built directly to show what happens when a machine is
-// handed a state it does not know: nothing is reachable.
-$stInStock = new State("IN_STOCK");
-
 echo "Where the product sits\n";
 foreach ([["qty" => 10, "min_stock" => 20], ["qty" => 30, "min_stock" => 20], ["qty" => 0, "min_stock" => 20]] as $data) {
     // The machine decides; the caller decides when it happened. In real code the new state
     // would be persisted here, before process() runs the side effect.
-    $stockMachine->autoTransitionFrom($stVoid, $data)?->process();
+    $stockMachine->autoTransitionFrom(Product::Start, $data)?->process();
 }
 
 echo "\nWhat is being done about it\n";
-// IN_STOCK has no outgoing transition in this machine, so there is nowhere to go.
-var_dump($resupplyMachine->autoTransitionFrom($stInStock, []));
+// IN_STOCK is a state of the resupply machine, but nothing leaves it: there is nowhere to go.
+var_dump($resupplyMachine->autoTransitionFrom(Product::InStock, []));
 
-$resupplyMachine->autoTransitionFrom($stLastUnits, [])?->process();
-$resupplyMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10])?->process();
-$resupplyMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])?->process();
-$resupplyMachine->autoTransitionFrom($stLastUnits, ["status" => "DNB"])?->process();
+$resupplyMachine->autoTransitionFrom(Product::LastUnits, [])?->process();
+$resupplyMachine->autoTransitionFrom(Product::LastUnits, ["invoice_number" => 10])?->process();
+$resupplyMachine->autoTransitionFrom(Product::LastUnits, ["invoice_number" => 10, "fulfilment_number" => 50])?->process();
+$resupplyMachine->autoTransitionFrom(Product::LastUnits, ["status" => "DNB"])?->process();
 
-echo "\nGet state\n";
-var_dump($resupplyMachine->state("NOT_REQUESTED"));
+echo "\nA state the enum declares but this machine never leaves\n";
+var_dump($resupplyMachine->isFinalState(Product::Resupplied));
+
+echo "\nA state that does not belong to this machine at all\n";
+try {
+    $resupplyMachine->isFinalState(Warehouse::Aisle);
+} catch (TransitionException $e) {
+    echo "  " . $e->getMessage() . "\n";
+}

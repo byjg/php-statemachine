@@ -1,6 +1,7 @@
 # Changelog 7.0
 
-Version 7.0 moves side effects from the **state** to the **transition**.
+Version 7.0 makes two changes: side effects move from the **state** to the **transition**, and a
+machine is now defined by an **enum**.
 
 In 6.x a state carried a `StateActionInterface` that ran when the state was processed. That
 model cannot express behaviour that depends on *how* a state was reached: if `C` must do one
@@ -11,11 +12,23 @@ Actions now live on the transition, which knows both ends of the move. A state-l
 just the special case of the same action attached to every inbound transition, so nothing is
 lost and the state-splitting workaround goes away.
 
+The second change follows from asking what a `State` was for. Everything the machine did with
+one on the way *in* reduced to its name, so `new State('A')` handed over an object whose data
+and origin could not mean anything — and the machine had no way to tell a real state from a
+typo. `isFinalState('TYPOO')` answered `true`, perfectly logically: nothing leaves a state
+nobody declared. A machine is now bound to an enum whose cases are exactly its states, so a
+state cannot be invented by a typo, by a stale name in a definition file, or by a case that
+belongs to some other enum. `State` becomes what the machine hands back, not what you build.
+
 ## Breaking Changes
 
 | | 6.x | 7.0 |
 |---|---|---|
-| **State constructor** | `new State($name, StateActionInterface $action)` | `new State($name)` — actions are declared on transitions |
+| **State constructor** | `new State($name, StateActionInterface $action)` | not called by you — a machine's states are the cases of its enum |
+| **Naming a state** | a `State` object | an enum case, the string it corresponds to, or a `State` the machine produced |
+| **Creating a machine** | `createMachine($transitions)` | `createMachine(OrderState::class, $transitions)` |
+| **An unknown state** | answered as if it existed | `TransitionException` |
+| **`state()`** | `?State` — `null` when unknown | `State` — throws when the reference names no state |
 | **Action interface** | `StateActionInterface::execute(?array $data): void` | `TransitionActionInterface::execute(State $from, State $to, ?array $data): void` |
 | **Where actions are declared** | on the `State` | 4th argument of `Transition`, `Transition::create()` and `Transition::createMultiple()` |
 | **`$state->process()`** | ran the state's own action | runs the action of the transition the state was reached through |
@@ -25,11 +38,12 @@ lost and the state-splitting workaround goes away.
 
 - `StateActionInterface` — replaced by `TransitionActionInterface`.
 - The second argument of the `State` constructor.
+- The idea of a state that the machine does not know about.
 
 ### Added
 
 - `TransitionActionInterface` — the side effect of taking one specific transition.
-- `FiniteStateMachine::transition(State $from, State $to, ?array $data = null): ?State` —
+- `FiniteStateMachine::transition($from, $to, ?array $data = null): ?State` —
   performs an explicit move and returns the state reached, stamped with the transition it came
   through. Returns `null` when the move is not allowed, or throws under
   `throwErrorIfCannotTransition()`. This is the counterpart of `autoTransitionFrom()` for when
@@ -37,18 +51,102 @@ lost and the state-splitting workaround goes away.
 - `State::arrivedThrough(State $from, ?TransitionActionInterface $action): void` — records the
   transition a state was reached through. Called by the state machine.
 - `State::getPreviousState(): ?State` — the state this one was reached from, or `null`.
+- `State::nameOf($ref): string` — the name a reference refers to. Internal; the machine and
+  `Transition` use it to accept a case, a string or a `State` interchangeably.
 - A 4th optional argument for the transition action on `Transition::__construct()`,
   `Transition::create()` and `Transition::createMultiple()`.
-- A 4th slot in the `createMachine()` array form: `['A', 'B', $condition, $action]`.
+- A 4th slot in the `createMachine()` array form: `[$from, $to, $condition, $action]`.
 - The condition and the action slots also accept the **name of a class** implementing the
   matching interface, resolved when the machine is built. A second optional argument of
   `createMachine()` takes a resolver — any `callable(string): object`, so `[$container, 'get']`
   works — for collaborators that need constructor arguments.
 - `FiniteStateMachine::fromDefinition(array $definition, ?callable $resolver = null)` — builds a
-  machine from a `['transitions' => [['from' => ..., 'to' => ..., 'condition' => ..., 'action' => ...]]]`
+  machine from an `['enum' => ..., 'transitions' => [['from' => ..., 'to' => ..., 'condition' => ..., 'action' => ...]]]`
   array, where `from` may be a list to declare the same move out of several states. The
   definition is a plain array, so YAML/JSON parsing stays outside this package and it keeps
   requiring nothing but PHP. See [Declarative Definition](docs/declarative-definition.md).
+
+## Defining a machine by an enum
+
+Declare the states as a string-backed enum and give it to the machine:
+
+```php
+enum OrderState: string
+{
+    case Draft     = 'DRAFT';
+    case Review    = 'REVIEW';
+    case Published = 'PUBLISHED';
+}
+
+$machine = FiniteStateMachine::createMachine(OrderState::class, [
+    [OrderState::Draft, OrderState::Review, HasReviewer::class],
+]);
+```
+
+Every method that names a state accepts three interchangeable forms:
+
+```php
+$machine->canTransition(OrderState::Draft, OrderState::Review, $data);   // a case
+$machine->canTransition('DRAFT', 'REVIEW', $data);                       // the string it corresponds to
+$machine->autoTransitionFrom($next, $moreData);                          // a State the machine produced
+```
+
+Names are compared uppercased, so `'draft'` and `'DRAFT'` are the same state, and an enum whose
+values are not uppercase still matches itself. A pure enum is named by its case names instead of
+its values. An int-backed enum is rejected — it would name states `"1"` and `"2"`.
+
+### What this catches
+
+```php
+$machine->isFinalState('REVIEWD');          // TransitionException — was `true`
+$machine->isFinalState(OtherEnum::Draft);   // TransitionException — was accepted
+FiniteStateMachine::createMachine(OrderState::class, [['DRAFT', 'REVIEEW']]);   // throws at build
+```
+
+The last one is the one a machine without an enum can never catch: a typo in the declaration
+used to create a second state that nothing could reach.
+
+These throw whether or not `throwErrorIfCannotTransition()` is enabled. That flag governs how the
+machine reports a move it *disallows*; a state that does not exist is not a move it disallowed,
+it is a mistake in the caller.
+
+### Migrating
+
+```php
+// 6.x / early 7.0
+$stA = new State('A');
+$stB = new State('B');
+$machine = FiniteStateMachine::createMachine()->addTransition(new Transition($stA, $stB));
+$machine->canTransition($stA, $stB);
+
+// 7.0
+enum Letter: string { case A = 'A'; case B = 'B'; }
+$machine = FiniteStateMachine::createMachine(Letter::class)
+    ->addTransition(new Transition(Letter::A, Letter::B));
+$machine->canTransition(Letter::A, Letter::B);
+```
+
+`Transition`, `Transition::create()` and `Transition::createMultiple()` take the same three
+forms, so `new State()` disappears from calling code entirely.
+
+A definition file now names its enum, which is what lets the file be hand-written safely:
+
+```yaml
+enum: 'App\Fsm\OrderState'
+transitions:
+  - from: DRAFT
+    to: REVIEW
+```
+
+### The boundary this draws
+
+The states of a machine must be known when the code is compiled. A workflow whose stages each
+tenant invents for themselves, or whose state names are rows in a table, cannot be expressed with
+this component — PHP enums are compile-time constructs and there is no runtime way to create one.
+
+This is deliberate. A state machine whose states are not predictable can guarantee very little:
+every name is taken on trust, every typo becomes a new state, and no answer about the graph can
+be trusted. Choosing predictability is what makes the rest of the guarantees possible.
 
 ## Migration
 
@@ -63,9 +161,8 @@ $machine->addTransition(new Transition($stA, $stC));
 $machine->addTransition(new Transition($stB, $stC));
 
 // 7.0
-$stC = new State('C');
 $machine->addTransitions(
-    Transition::createMultiple([$stA, $stB], $stC, null, $arrivalAction)
+    Transition::createMultiple([Letter::A, Letter::B], Letter::C, null, $arrivalAction)
 );
 ```
 
@@ -82,8 +179,8 @@ $stC = new State('C', new class implements StateActionInterface {
 });
 
 // 7.0
-$machine->addTransition(Transition::create($stA, $stC, null, $viaAAction));
-$machine->addTransition(Transition::create($stB, $stC, null, $viaBAction));
+$machine->addTransition(Transition::create(Letter::A, Letter::C, null, $viaAAction));
+$machine->addTransition(Transition::create(Letter::B, Letter::C, null, $viaBAction));
 ```
 
 ### The action signature
@@ -112,20 +209,21 @@ $audit = new class implements TransitionActionInterface {
 
 ### Code that processed a state without transitioning
 
-`$fsm->state('C')->process()` is now a no-op, because that state was not reached by anything.
-Obtain the state from the move itself:
+`$fsm->state(Letter::C)->process()` is now a no-op, because that state was not reached by
+anything. Obtain the state from the move itself:
 
 ```php
 // 7.0
-$next = $fsm->transition($current, $stC, $data);   // or autoTransitionFrom()
+$next = $fsm->transition($current, Letter::C, $data);   // or autoTransitionFrom()
 $next?->process();
 ```
 
 ## Unchanged
 
 - `TransitionConditionInterface` and its `canTransition(?array $data): bool` signature.
-- `canTransition()`, `autoTransitionFrom()`, `possibleTransitions()`, `getTransition()`,
-  `isInitialState()`, `isFinalState()`, `state()`.
+- What `canTransition()`, `autoTransitionFrom()`, `possibleTransitions()`, `getTransition()`,
+  `isInitialState()` and `isFinalState()` mean. They accept a wider set of arguments and reject
+  a state that does not exist, but the questions they answer are the same.
 - The state machine still never runs actions on its own: it decides whether a move is legal,
   and the caller decides when it happened by calling `process()`. Persist the new state before
   processing it, so a failed write cannot leave a side effect already dispatched.

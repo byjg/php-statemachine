@@ -15,16 +15,29 @@ flowchart LR
 
 We have the states A, B, C, and D, and their possible transitions.
 
-## Creating States
+## Declaring the States
 
-First, we create the states:
+A machine is defined by an enum, and its cases are exactly the states that exist:
 
 ```php
-$stA = new State("A");
-$stB = new State("B");
-$stC = new State("C");
-$stD = new State("D");
+enum Letter: string
+{
+    case A = 'A';
+    case B = 'B';
+    case C = 'C';
+    case D = 'D';
+}
 ```
+
+Everywhere a state is named you may use a case, the string it corresponds to, or a `State` the
+machine produced earlier. Anything else — a misspelled name, a case of some other enum — is
+rejected where it is written.
+
+:::note
+You never construct a `State` yourself. A `State` is what the machine hands back: a name plus
+the data it was reached with and the transition it came through. The name on its own is what the
+enum is for.
+:::
 
 ## Defining Transitions
 
@@ -34,8 +47,8 @@ Then, we define the transitions. Each transition can optionally have a **conditi
 use ByJG\StateMachine\TransitionConditionInterface;
 
 // Simple transitions without conditions
-$transitionA_B = new Transition($stA, $stB);
-$transitionA_C = new Transition($stA, $stC);
+$transitionA_B = new Transition(Letter::A, Letter::B);
+$transitionA_C = new Transition(Letter::A, Letter::C);
 
 // Transition with a condition
 $condition = new class implements TransitionConditionInterface {
@@ -43,7 +56,7 @@ $condition = new class implements TransitionConditionInterface {
         return !is_null($data);
     }
 };
-$transitionB_D = new Transition($stB, $stD, $condition);
+$transitionB_D = new Transition(Letter::B, Letter::D, $condition);
 ```
 
 A transition can also carry an **action** implementing `TransitionActionInterface`, which is
@@ -57,7 +70,7 @@ $notify = new class implements TransitionActionInterface {
         // Runs when this specific transition is taken
     }
 };
-$transitionB_D = new Transition($stB, $stD, $condition, $notify);
+$transitionB_D = new Transition(Letter::B, Letter::D, $condition, $notify);
 ```
 
 :::info
@@ -75,10 +88,11 @@ differently depending on where it was reached from, without being split in two. 
 
 ## Creating the State Machine
 
-After creating the states and the transition, we can create the State Machine:
+After declaring the enum and the transitions, we can create the State Machine. It is bound to
+the enum, so every transition added to it is checked against the states that enum declares:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine()
+$stateMachine = FiniteStateMachine::createMachine(Letter::class)
     ->addTransition($transitionA_B)
     ->addTransition($transitionA_C)
     ->addTransition($transitionB_D);
@@ -89,13 +103,13 @@ $stateMachine = FiniteStateMachine::createMachine()
 We can validate the transition using the method `canTransition($from, $to)`. Some examples:
 
 ```php
-$stateMachine->canTransition($stA, $stB);  // returns true
-$stateMachine->canTransition($stA, $stC);  // returns true
-$stateMachine->canTransition($stA, $stD);  // returns false
-$stateMachine->canTransition($stB, $stA);  // returns false
-$stateMachine->canTransition($stB, $stD);  // returns false
-$stateMachine->canTransition($stB, $stD, ["some_info"]); // returns true
-$stateMachine->canTransition($stC, $stD); //returns false
+$stateMachine->canTransition(Letter::A, Letter::B);  // returns true
+$stateMachine->canTransition(Letter::A, Letter::C);  // returns true
+$stateMachine->canTransition(Letter::A, Letter::D);  // returns false
+$stateMachine->canTransition(Letter::B, Letter::A);  // returns false
+$stateMachine->canTransition(Letter::B, Letter::D);  // returns false
+$stateMachine->canTransition(Letter::B, Letter::D, ["some_info"]); // returns true
+$stateMachine->canTransition(Letter::C, Letter::D); //returns false
 ```
 
 ## Checking Initial and Final States
@@ -103,11 +117,11 @@ $stateMachine->canTransition($stC, $stD); //returns false
 We can also check if a state is initial or final:
 
 ```php
-$stateMachine->isInitialState($stA); // returns true
-$stateMachine->isInitialState($stB); // returns false
-$stateMachine->isFinalState($stA); // returns false
-$stateMachine->isFinalState($stC); // returns true
-$stateMachine->isFinalState($stD); // returns true
+$stateMachine->isInitialState(Letter::A); // returns true
+$stateMachine->isInitialState(Letter::B); // returns false
+$stateMachine->isFinalState(Letter::A); // returns false
+$stateMachine->isFinalState(Letter::C); // returns true
+$stateMachine->isFinalState(Letter::D); // returns true
 ```
 
 ## Alternative Ways to Create the State Machine
@@ -122,11 +136,12 @@ $condition = new class implements TransitionConditionInterface {
 };
 
 $stateMachine = FiniteStateMachine::createMachine(
+    Letter::class,
     [
-        ['A', 'B'],
-        ['A', 'C'],
-        ['B', 'D', $condition],
-        ['C', 'D', $condition, $action]   // the fourth slot is the transition action
+        [Letter::A, Letter::B],
+        [Letter::A, Letter::C],
+        [Letter::B, Letter::D, $condition],
+        [Letter::C, Letter::D, $condition, $action]   // the fourth slot is the transition action
     ]
 );
 ```
@@ -142,7 +157,7 @@ returns the state reached — carrying the data and the transition it came throu
 `null` when the move is not allowed:
 
 ```php
-$next = $stateMachine->transition($stB, $stD, ["some_info"]);
+$next = $stateMachine->transition(Letter::B, Letter::D, ["some_info"]);
 
 $repository->save($entity, $next);  // commit the move first
 $next->process();                   // then run the transition action

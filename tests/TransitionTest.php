@@ -6,6 +6,7 @@ use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
 use ByJG\StateMachine\TransitionConditionInterface;
 use PHPUnit\Framework\TestCase;
+use Tests\Fixture\Letter;
 
 class TransitionTest extends TestCase
 {
@@ -61,5 +62,36 @@ class TransitionTest extends TestCase
 
         $this->assertEquals($state2, $transitionList[1]->getCurrentState());
         $this->assertEquals($state3, $transitionList[1]->getDesiredState());
+    }
+
+    /**
+     * A Transition names its ends the same way the machine does. On its own it has no enum to
+     * check them against — it normalises the reference, and FiniteStateMachine::addTransition()
+     * is what rejects a state the enum does not declare.
+     */
+    public function testEndsCanBeNamedByACaseOrAString(): void
+    {
+        $fromCase = Transition::create(Letter::A, Letter::B);
+        $this->assertEquals('A', $fromCase->getCurrentState()->getState());
+        $this->assertEquals('B', $fromCase->getDesiredState()->getState());
+
+        $fromString = Transition::create('a', 'b');
+        $this->assertEquals('A', $fromString->getCurrentState()->getState());
+        $this->assertEquals('B', $fromString->getDesiredState()->getState());
+
+        $fromState = Transition::create(new State('A'), new State('B'));
+        $this->assertEquals('A', $fromState->getCurrentState()->getState());
+        $this->assertEquals('B', $fromState->getDesiredState()->getState());
+    }
+
+    public function testMultipleTransitionAcceptsCases(): void
+    {
+        $transitionList = Transition::createMultiple([Letter::A, Letter::B], Letter::C);
+
+        $this->assertCount(2, $transitionList);
+        $this->assertEquals('A', $transitionList[0]->getCurrentState()->getState());
+        $this->assertEquals('C', $transitionList[0]->getDesiredState()->getState());
+        $this->assertEquals('B', $transitionList[1]->getCurrentState()->getState());
+        $this->assertEquals('C', $transitionList[1]->getDesiredState()->getState());
     }
 }

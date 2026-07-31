@@ -2,12 +2,28 @@
 
 namespace ByJG\StateMachine;
 
+/**
+ * A finite state machine over the states named by one enum.
+ *
+ * The enum is what a machine is: its cases are exactly the states that exist, so a state
+ * cannot be invented by a typo in a transition, by a stale string in a definition file, or by
+ * a case belonging to some other enum. Every method that names a state accepts a case of that
+ * enum, the string it corresponds to, or a State the machine produced earlier, and anything
+ * else is rejected where it is written rather than where it is used.
+ *
+ * The consequence is deliberate: the states of a machine must be known when the code is
+ * compiled. Machines whose state names arrive as data at runtime — a workflow whose stages
+ * each tenant invents for themselves, say — cannot be expressed with this component.
+ */
 class FiniteStateMachine
 {
     /** @var array<string, Transition> Keyed by "CURRENT___DESIRED" */
     protected array $transitionList = [];
 
-    /** @var array<string, State> Keyed by the uppercased state name */
+    /** @var class-string<\UnitEnum> The enum naming the states of this machine */
+    protected string $enumClass;
+
+    /** @var array<string, State> One per case of the enum, keyed by the uppercased name */
     protected array $stateList = [];
 
     /** @var (callable(string): object)|null Turns a class name into the collaborator it names */
@@ -21,31 +37,70 @@ class FiniteStateMachine
     protected bool $throwErrorOnAmbiguity = false;
 
     /**
-     * @param array $transitionList Each entry is [from, to, condition?, action?]. The condition
-     *                              and the action may be instances or the name of a class
-     *                              implementing the matching interface.
+     * @param string $enum The enum whose cases are the states of this machine
+     * @throws TransitionException If the enum cannot name a set of states
+     */
+    public function __construct(string $enum)
+    {
+        if (!enum_exists($enum)) {
+            throw new TransitionException(
+                "'{$enum}' is not an enum. The states of a machine are named by the cases of one."
+            );
+        }
+
+        $reflection = new \ReflectionEnum($enum);
+
+        // A state is named by the case value, so an int-backed enum would name states "1", "2"
+        if ($reflection->isBacked() && (string)$reflection->getBackingType() !== "string") {
+            throw new TransitionException(
+                "{$enum} is backed by {$reflection->getBackingType()}. States are named by the case "
+                . "value, so a backed enum must be backed by string."
+            );
+        }
+
+        /** @var class-string<\UnitEnum> $enum */
+        $this->enumClass = $enum;
+
+        foreach ($enum::cases() as $case) {
+            $name = State::nameOf($case);
+
+            if (isset($this->stateList[$name])) {
+                throw new TransitionException(
+                    "{$enum} has two cases naming the state '{$name}'. State names are compared "
+                    . "uppercased, so they cannot be told apart."
+                );
+            }
+
+            $this->stateList[$name] = new State($name);
+        }
+    }
+
+    /**
+     * @param string $enum The enum whose cases are the states of this machine
+     * @param array $transitionList Each entry is [from, to, condition?, action?]. Both ends are
+     *                              named by an enum case or the string it corresponds to; the
+     *                              condition and the action may be instances or the name of a
+     *                              class implementing the matching interface.
      * @param callable|null $resolver Builds a collaborator from its class name. Defaults to
      *                                `new $className()`. Pass `[$container, 'get']` to let a
      *                                PSR-11 container build it instead.
      * @return FiniteStateMachine
-     * @throws TransitionException If a class name cannot be resolved into the right interface
+     * @throws TransitionException If a state is not a case of the enum, or a class name cannot
+     *                             be resolved into the right interface
      */
-    public static function createMachine(array $transitionList = [], ?callable $resolver = null): FiniteStateMachine
-    {
-        $stateList = [];
-        $stateMachine = new FiniteStateMachine();
+    public static function createMachine(
+        string $enum,
+        array $transitionList = [],
+        ?callable $resolver = null
+    ): FiniteStateMachine {
+        $stateMachine = new FiniteStateMachine($enum);
         $stateMachine->resolver = $resolver;
 
         foreach ($transitionList as $transition) {
-            // Keyed by the uppercased name, because that is how State compares itself. Without
-            // it a definition mixing "Draft" and "DRAFT" would build two objects for one state.
-            $st1 = $stateList[strtoupper($transition[0])] ??= new State($transition[0]);
-            $st2 = $stateList[strtoupper($transition[1])] ??= new State($transition[1]);
-
             $stateMachine->addTransition(
                 new Transition(
-                    $st1,
-                    $st2,
+                    $transition[0],
+                    $transition[1],
                     $stateMachine->resolve($transition[2] ?? null, TransitionConditionInterface::class),
                     $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class)
                 )
@@ -56,16 +111,70 @@ class FiniteStateMachine
     }
 
     /**
+     * The name of the state a reference refers to, or an exception when it names none.
+     *
+     * A case of another enum is the mistake worth catching here: it satisfies every type
+     * declaration a union could express, and only the machine knows which enum is its own.
+     *
+     * @param string|\UnitEnum|State $state
+     * @return string
+     * @throws TransitionException
+     */
+    protected function stateName(string|\UnitEnum|State $state): string
+    {
+        if ($state instanceof \UnitEnum) {
+            $this->assertOwnCase($state);
+        }
+
+        $name = State::nameOf($state);
+
+        if (!isset($this->stateList[$name])) {
+            throw new TransitionException(
+                "'{$name}' is not a state of this machine. {$this->enumClass} declares: "
+                . implode(", ", array_keys($this->stateList))
+            );
+        }
+
+        return $name;
+    }
+
+    /**
+     * Rejects a case that belongs to some other enum.
+     *
+     * is_a() rather than instanceof, because the class to compare against is only known at
+     * runtime and an instanceof against a dynamic name tells static analysis nothing.
+     *
+     * @param \UnitEnum $case
+     * @throws TransitionException
+     */
+    protected function assertOwnCase(\UnitEnum $case): void
+    {
+        if (is_a($case, $this->enumClass)) {
+            return;
+        }
+
+        throw new TransitionException(
+            get_class($case) . "::{$case->name} is not a state of this machine, which is defined "
+            . "by {$this->enumClass}"
+        );
+    }
+
+    /**
      * Builds a machine from a definition that came from outside PHP.
      *
      * The definition is a plain array, so the format it was written in is not this package's
      * concern: parse YAML, JSON or anything else into an array and hand it over.
      *
+     *     enum: App\Fsm\ArticleState
      *     transitions:
      *       - from: DRAFT
      *         to: REVIEW
      *         condition: App\Fsm\HasReviewer
      *         action: App\Fsm\NotifyReviewer
+     *
+     * `enum` is required and names the states: every `from` and `to` in the file must be one of
+     * its cases, so a stale or misspelled state name is rejected when the file is read rather
+     * than silently becoming a state nothing can reach.
      *
      * `from` also accepts a list, which declares the same move out of several states. It is
      * the declarative form of Transition::createMultiple():
@@ -82,6 +191,10 @@ class FiniteStateMachine
      */
     public static function fromDefinition(array $definition, ?callable $resolver = null): FiniteStateMachine
     {
+        if (!isset($definition["enum"]) || !is_string($definition["enum"])) {
+            throw new TransitionException("The definition must declare the 'enum' naming its states");
+        }
+
         if (!isset($definition["transitions"]) || !is_array($definition["transitions"])) {
             throw new TransitionException("The definition must declare a 'transitions' list");
         }
@@ -97,7 +210,7 @@ class FiniteStateMachine
             }
         }
 
-        return static::createMachine($transitionList, $resolver);
+        return static::createMachine($definition["enum"], $transitionList, $resolver);
     }
 
     /**
@@ -163,19 +276,26 @@ class FiniteStateMachine
         return $this;
     }
 
-    protected function getKey(State $currentState, State $desiredState): string
+    protected function getKey(string $currentState, string $desiredState): string
     {
-        return $currentState->getState() . "___" . $desiredState->getState();
+        return $currentState . "___" . $desiredState;
     }
 
     /**
+     * Both ends are validated here, which is where a state that the enum does not declare is
+     * caught — whether it was written in PHP, read from a definition file, or mistyped.
+     *
      * @param Transition $transition
      * @return $this
-     * @throws TransitionException If a transition between the same pair of states already exists
+     * @throws TransitionException If either end is not a state of this machine, or a transition
+     *                             between the same pair of states already exists
      */
     public function addTransition(Transition $transition): static
     {
-        $key = $this->getKey($transition->getCurrentState(), $transition->getDesiredState());
+        $key = $this->getKey(
+            $this->stateName($transition->getCurrentState()),
+            $this->stateName($transition->getDesiredState())
+        );
 
         if (isset($this->transitionList[$key])) {
             throw new TransitionException(
@@ -186,12 +306,6 @@ class FiniteStateMachine
 
         $this->transitionList[$key] = $transition;
 
-        if (!isset($this->stateList[$transition->getCurrentState()->getState()])) {
-            $this->stateList[$transition->getCurrentState()->getState()] = $transition->getCurrentState();
-        }
-        if (!isset($this->stateList[$transition->getDesiredState()->getState()])) {
-            $this->stateList[$transition->getDesiredState()->getState()] = $transition->getDesiredState();
-        }
         return $this;
     }
 
@@ -207,8 +321,10 @@ class FiniteStateMachine
         return $this;
     }
 
-    public function possibleTransitions(State $currentState): array
+    public function possibleTransitions(string|\UnitEnum|State $currentState): array
     {
+        $currentState = $this->stateName($currentState);
+
         $next = array_map(function ($key, $value) use ($currentState) {
             if (strpos($key, "{$currentState}___") === 0) {
                 return $value;
@@ -219,13 +335,13 @@ class FiniteStateMachine
         return array_values(array_filter($next));
     }
 
-    public function getTransition(State $currentState, State $desiredState): ?Transition
-    {
-        if (isset($this->transitionList[$this->getKey($currentState, $desiredState)])) {
-            return $this->transitionList[$this->getKey($currentState, $desiredState)];
-        }
+    public function getTransition(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState
+    ): ?Transition {
+        $key = $this->getKey($this->stateName($currentState), $this->stateName($desiredState));
 
-        return null;
+        return $this->transitionList[$key] ?? null;
     }
 
     /**
@@ -244,8 +360,9 @@ class FiniteStateMachine
      *                             throwErrorIfCannotTransition() is enabled, or if it
      *                             matches several and throwErrorIfAmbiguousTransition() is
      */
-    public function autoTransitionFrom(State $currentState, array $data): ?State
+    public function autoTransitionFrom(string|\UnitEnum|State $currentState, array $data): ?State
     {
+        $currentState = $this->state($currentState);
         $matched = [];
 
         /**
@@ -316,14 +433,20 @@ class FiniteStateMachine
      * @throws TransitionException If the move is not allowed and
      *                             throwErrorIfCannotTransition() is enabled
      */
-    public function transition(State $currentState, State $desiredState, ?array $data = null): ?State
-    {
+    public function transition(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?array $data = null
+    ): ?State {
         $transition = $this->getTransition($currentState, $desiredState);
         $allowed = !empty($transition) && $transition->runTransitionFunction($data);
 
         if (!$allowed) {
             if ($this->throwError) {
-                throw new TransitionException("Cannot transition from {$currentState} to {$desiredState}");
+                throw new TransitionException(
+                    "Cannot transition from " . $this->stateName($currentState)
+                    . " to " . $this->stateName($desiredState)
+                );
             }
 
             return null;
@@ -335,19 +458,28 @@ class FiniteStateMachine
     /**
      * @throws TransitionException
      */
-    public function canTransition(State $currentState, State $desiredState, ?array $data = null): bool
-    {
+    public function canTransition(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?array $data = null
+    ): bool {
         $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
 
         if ($this->throwError && !$result) {
-            throw new TransitionException("Cannot transition from {$currentState} to {$desiredState}");
+            throw new TransitionException(
+                "Cannot transition from " . $this->stateName($currentState)
+                . " to " . $this->stateName($desiredState)
+            );
         }
 
         return $result;
     }
 
-    protected function checkIfCanTransition(State $currentState, State $desiredState, ?array $data = null): bool
-    {
+    protected function checkIfCanTransition(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?array $data = null
+    ): bool {
         $transition = $this->getTransition($currentState, $desiredState);
 
         if (empty($transition)) {
@@ -358,20 +490,20 @@ class FiniteStateMachine
     }
 
     /**
-     * Returns a copy of the named state, or null if the machine doesn't know it.
+     * A copy of the state a reference names.
+     *
+     * This cannot fail: every case of the enum is a state of the machine, and anything that is
+     * not a case is rejected. There is no "does this state exist" question left to ask.
      *
      * The copy is intentional: the caller is free to attach data to the returned state
      * without corrupting the machine definition.
      *
-     * @param string $state
+     * @param string|\UnitEnum|State $state
+     * @throws TransitionException If the reference does not name a state of this machine
      */
-    public function state(string $state): ?State
+    public function state(string|\UnitEnum|State $state): State
     {
-        if (isset($this->stateList[strtoupper($state)])) {
-            return clone $this->stateList[strtoupper($state)];
-        }
-
-        return null;
+        return clone $this->stateList[$this->stateName($state)];
     }
 
     /**
@@ -380,10 +512,12 @@ class FiniteStateMachine
      * States are identified by name only. The data a state carries (set by
      * autoTransitionFrom, for instance) is irrelevant to the question.
      */
-    public function isInitialState(State $state): bool
+    public function isInitialState(string|\UnitEnum|State $state): bool
     {
+        $name = $this->stateName($state);
+
         foreach ($this->transitionList as $transition) {
-            if ($transition->getDesiredState()->getState() === $state->getState()) {
+            if ($transition->getDesiredState()->getState() === $name) {
                 return false;
             }
         }
@@ -397,10 +531,12 @@ class FiniteStateMachine
      * States are identified by name only. The data a state carries (set by
      * autoTransitionFrom, for instance) is irrelevant to the question.
      */
-    public function isFinalState(State $state): bool
+    public function isFinalState(string|\UnitEnum|State $state): bool
     {
+        $name = $this->stateName($state);
+
         foreach ($this->transitionList as $transition) {
-            if ($transition->getCurrentState()->getState() === $state->getState()) {
+            if ($transition->getCurrentState()->getState() === $name) {
                 return false;
             }
         }

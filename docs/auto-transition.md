@@ -21,16 +21,22 @@ flowchart LR
 The transition is only possible if some conditions are satisfied. So, let's create the state,
 the possible transitions and its conditions.
 
-### Creating States and Transitions
+### Declaring the States and Transitions
 
 ```php
 use ByJG\StateMachine\TransitionConditionInterface;
 
-// States:
-$stInitial = new State("__VOID__");
-$stInStock = new State("IN_STOCK");
-$stLastUnits = new State("LAST_UNITS");
-$stOutOfStock = new State("OUT_OF_STOCK");
+// The states, and nothing but the states:
+enum Stock: string
+{
+    case Start = '__VOID__';
+    case InStock = 'IN_STOCK';
+    case LastUnits = 'LAST_UNITS';
+    case OutOfStock = 'OUT_OF_STOCK';
+    case RequestedResupply = 'REQUESTED_RESUPPLY';
+    case Resupplied = 'RESUPPLIED';
+    case Unavailable = 'UNAVAILABLE';
+}
 
 // Transition conditions:
 $inStockCondition = new class implements TransitionConditionInterface {
@@ -52,12 +58,12 @@ $outOfStockCondition = new class implements TransitionConditionInterface {
 };
 
 // Transitions:
-$transitionInStock = Transition::create($stInitial, $stInStock, $inStockCondition);
-$transitionLastUnits = Transition::create($stInitial, $stLastUnits, $lastUnitsCondition);
-$transitionOutOfStock = Transition::create($stInitial, $stOutOfStock, $outOfStockCondition);
+$transitionInStock = Transition::create(Stock::Start, Stock::InStock, $inStockCondition);
+$transitionLastUnits = Transition::create(Stock::Start, Stock::LastUnits, $lastUnitsCondition);
+$transitionOutOfStock = Transition::create(Stock::Start, Stock::OutOfStock, $outOfStockCondition);
 
 // Create the Machine:
-$stateMachine = FiniteStateMachine::createMachine()
+$stateMachine = FiniteStateMachine::createMachine(Stock::class)
     ->addTransition($transitionInStock)
     ->addTransition($transitionLastUnits)
     ->addTransition($transitionOutOfStock);
@@ -69,9 +75,9 @@ The method `autoTransitionFrom` will check if is possible to do the transition w
 and to what state.
 
 ```php
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 10, "min_stock" => 20]); // returns LAST_UNITS
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 30, "min_stock" => 20]); // returns IN_STOCK
-$stateMachine->autoTransitionFrom($stInitial, ["qty" => 0, "min_stock" => 20]); // returns OUT_OF_STOCK
+$stateMachine->autoTransitionFrom(Stock::Start, ["qty" => 10, "min_stock" => 20]); // returns LAST_UNITS
+$stateMachine->autoTransitionFrom(Stock::Start, ["qty" => 30, "min_stock" => 20]); // returns IN_STOCK
+$stateMachine->autoTransitionFrom(Stock::Start, ["qty" => 0, "min_stock" => 20]); // returns OUT_OF_STOCK
 ```
 
 When auto transitioned, the state object returned has the `->getData()` method with the data used to validate it.
@@ -110,14 +116,14 @@ If your conditions are meant to be mutually exclusive, use `throwErrorIfAmbiguou
 to be told when they are not, instead of silently getting the first declaration:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine()
+$stateMachine = FiniteStateMachine::createMachine(Stock::class)
     ->addTransition($transitionRequested)
     ->addTransition($transitionUnavailable)
     ->throwErrorIfAmbiguousTransition();
 
 // Throws TransitionException:
 // "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
-$stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "status" => "DNB"]);
+$stateMachine->autoTransitionFrom(Stock::LastUnits, ["invoice_number" => 10, "status" => "DNB"]);
 ```
 
 Data matching exactly one transition still transitions normally, and data matching none
@@ -143,11 +149,11 @@ $notifyResupply = new class implements TransitionActionInterface {
     }
 };
 
-$transition = Transition::create($stLastUnits, $stRequested, $requestedCondition, $notifyResupply);
+$transition = Transition::create(Stock::LastUnits, Stock::RequestedResupply, $requestedCondition, $notifyResupply);
 ```
 
 ```php
-$resultState = $stateMachine->autoTransitionFrom($stLastUnits, [... data ...]);
+$resultState = $stateMachine->autoTransitionFrom(Stock::LastUnits, [... data ...]);
 
 $repository->save($entity, $resultState);   // commit the move first
 $resultState->process();                    // then run the transition action
@@ -164,12 +170,12 @@ This is the point of the design. Consider a state `C` reachable from both `A` an
 each route must do something different:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine()
-    ->addTransition(Transition::create($stA, $stC, null, $viaAAction))
-    ->addTransition(Transition::create($stB, $stC, null, $viaBAction));
+$stateMachine = FiniteStateMachine::createMachine(Stock::class)
+    ->addTransition(Transition::create(Stock::LastUnits, Stock::Resupplied, null, $viaAAction))
+    ->addTransition(Transition::create(Stock::OutOfStock, Stock::Resupplied, null, $viaBAction));
 
-$stateMachine->autoTransitionFrom($stA, $data)->process();   // runs $viaAAction only
-$stateMachine->autoTransitionFrom($stB, $data)->process();   // runs $viaBAction only
+$stateMachine->autoTransitionFrom(Stock::LastUnits, $data)->process();   // runs $viaAAction only
+$stateMachine->autoTransitionFrom(Stock::OutOfStock, $data)->process();   // runs $viaBAction only
 ```
 
 There is one `C`. No `C_VIA_A`/`C_VIA_B` split, and no `if` inside the action asking where it
@@ -179,12 +185,17 @@ When the side effect is the same on every route into a state, declare it once wi
 `createMultiple()`, which attaches one action to every inbound transition:
 
 ```php
-Transition::createMultiple([$stA, $stB, $stX], $stC, $condition, $arrivalAction);
+Transition::createMultiple(
+    [Stock::LastUnits, Stock::OutOfStock, Stock::RequestedResupply],
+    Stock::Resupplied,
+    $condition,
+    $arrivalAction
+);
 ```
 
 :::info
-Because the action lives on the transition, `$stateMachine->state('C')->process()` does
-nothing: that state was not reached by anything, so there is no transition to run. Use
+Because the action lives on the transition, `$stateMachine->state(Stock::Resupplied)->process()`
+does nothing: that state was not reached by anything, so there is no transition to run. Use
 `transition()` or `autoTransitionFrom()` to obtain a state that can be processed.
 :::
 
@@ -195,7 +206,7 @@ nothing: that state was not reached by anything, so there is no transition to ru
 transition it came through:
 
 ```php
-$next = $stateMachine->transition($stLastUnits, $stRequested, ["invoice_number" => 10]);
+$next = $stateMachine->transition(Stock::LastUnits, Stock::RequestedResupply, ["invoice_number" => 10]);
 
 if ($next !== null) {
     $repository->save($entity, $next);

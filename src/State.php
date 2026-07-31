@@ -9,6 +9,11 @@ namespace ByJG\StateMachine;
  * States carry no behaviour of their own. What happens when a state is reached belongs
  * to the transition that reached it, so that the same state can behave differently
  * depending on where it was reached from, without having to be split in two.
+ *
+ * A State is produced by the machine, never by the caller. Everything that identifies a
+ * state — its name — is expressed by a case of the enum the machine is defined by, and a
+ * State adds to that the data it was reached with and where it was reached from. Building
+ * one by hand therefore yields an object whose data and origin cannot mean anything.
  */
 class State
 {
@@ -21,11 +26,44 @@ class State
     protected ?TransitionActionInterface $transitionAction = null;
 
     /**
+     * Name a state to the machine with an enum case or a string, not with a new State.
+     *
+     * @internal Produced by FiniteStateMachine and Transition. Not part of the public API.
      * @param string $state
      */
     public function __construct(string $state)
     {
         $this->state = $state;
+    }
+
+    /**
+     * The uppercased name of whatever was used to refer to a state.
+     *
+     * Backed enums are named by their value and pure enums by their case name, so a case,
+     * the string it corresponds to, and a State carrying it all resolve to one name. This is
+     * what lets an enum query a machine whose graph was defined in YAML.
+     *
+     * The name is not checked against any machine here — this only reads the reference. It is
+     * FiniteStateMachine that decides whether the name is one of its states.
+     *
+     * @internal
+     */
+    public static function nameOf(string|\UnitEnum|State $state): string
+    {
+        if ($state instanceof State) {
+            return $state->getState();
+        }
+
+        // BackedEnum extends UnitEnum, so it has to be tested first
+        if ($state instanceof \BackedEnum) {
+            return strtoupper((string)$state->value);
+        }
+
+        if ($state instanceof \UnitEnum) {
+            return strtoupper($state->name);
+        }
+
+        return strtoupper($state);
     }
 
     public function __toString()

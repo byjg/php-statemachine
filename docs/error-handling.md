@@ -11,7 +11,7 @@ By default, the state machine returns `false` or `null` when a transition is not
 Use the `throwErrorIfCannotTransition()` method to enable exception throwing:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine()
+$stateMachine = FiniteStateMachine::createMachine(Letter::class)
     ->addTransition($transitionA_B)
     ->addTransition($transitionA_C)
     ->throwErrorIfCannotTransition();
@@ -25,7 +25,7 @@ When exceptions are enabled, `canTransition()` will throw a `TransitionException
 
 ```php
 try {
-    $stateMachine->canTransition($stA, $stD);
+    $stateMachine->canTransition(Letter::A, Letter::D);
 } catch (TransitionException $e) {
     echo $e->getMessage(); // "Cannot transition from A to D"
 }
@@ -38,7 +38,7 @@ exceptions enabled it throws instead:
 
 ```php
 try {
-    $stateMachine->transition($stB, $stA);
+    $stateMachine->transition(Letter::B, Letter::A);
 } catch (TransitionException $e) {
     echo $e->getMessage(); // "Cannot transition from B to A"
 }
@@ -50,7 +50,7 @@ When exceptions are enabled, `autoTransitionFrom()` will throw a `TransitionExce
 
 ```php
 try {
-    $stateMachine->autoTransitionFrom($stInitial, ["invalid" => "data"]);
+    $stateMachine->autoTransitionFrom(Stock::Start, ["invalid" => "data"]);
 } catch (TransitionException $e) {
     echo $e->getMessage(); // "There is not possible transitions from __VOID__ with the data provided"
 }
@@ -66,13 +66,13 @@ Enable `throwErrorIfAmbiguousTransition()` when your conditions are meant to be 
 exclusive and you would rather hear about an overlap than depend on declaration order:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine()
+$stateMachine = FiniteStateMachine::createMachine(Stock::class)
     ->addTransition($transitionRequested)
     ->addTransition($transitionUnavailable)
     ->throwErrorIfAmbiguousTransition();
 
 try {
-    $stateMachine->autoTransitionFrom($stLastUnits, ["invoice_number" => 10, "status" => "DNB"]);
+    $stateMachine->autoTransitionFrom(Stock::LastUnits, ["invoice_number" => 10, "status" => "DNB"]);
 } catch (TransitionException $e) {
     // "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
     echo $e->getMessage();
@@ -89,3 +89,17 @@ The `TransitionException` class extends the standard PHP `Exception` class:
 ```php
 use ByJG\StateMachine\TransitionException;
 ```
+
+## A State That Does Not Exist
+
+The errors above are *answers*: the machine is telling you a move it knows about is not allowed.
+Naming a state the machine does not have is a different thing — a mistake in the caller — and it
+always throws, whether or not `throwErrorIfCannotTransition()` is enabled:
+
+```php
+$stateMachine->isFinalState('REVIEWD');        // TransitionException: not a state of this machine
+$stateMachine->isFinalState(OtherEnum::Draft); // TransitionException: defined by Stock
+```
+
+This is what binding the machine to an enum buys. Without it, `isFinalState('REVIEWD')` would
+answer `true` — perfectly logically, since nothing leaves a state nobody declared.

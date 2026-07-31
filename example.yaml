@@ -3,8 +3,11 @@
 #   A --> B --> D (only when there is data)
 #   A --> C
 #
-# Only `from` and `to` are required. `condition` names a class implementing
-# TransitionConditionInterface; `action` would name a TransitionActionInterface.
+# `enum` names the states: every `from` and `to` below must be one of its cases, so a
+# misspelled state name is rejected when this file is read. `condition` names a class
+# implementing TransitionConditionInterface; `action` would name a TransitionActionInterface.
+
+enum: Letters
 
 transitions:
   - from: A

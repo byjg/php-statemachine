@@ -2,7 +2,8 @@
 #
 # `fromDefinition()` reads a single machine, so a file describing more than one just nests
 # them under a key each — the definition is a plain array and can live anywhere inside a
-# larger configuration.
+# larger configuration. Each one names the enum its states come from; here both halves of the
+# product lifecycle are cases of the same enum.
 
 # Where a product sits, decided purely by the quantity in hand.
 #
@@ -11,6 +12,7 @@
 # The transitions are evaluated in the order declared and the first match wins, so keep
 # mutually exclusive conditions here (or call throwErrorIfAmbiguousTransition()).
 stock:
+  enum: Product
   transitions:
     - from: __VOID__
       to: IN_STOCK
@@ -30,6 +32,7 @@ stock:
 # What is being done about a product that is running out. A list in `from` declares the same
 # move out of several states: it is the declarative Transition::createMultiple().
 resupply:
+  enum: Product
   transitions:
     - from: [LAST_UNITS, OUT_OF_STOCK]
       to: NOT_REQUESTED

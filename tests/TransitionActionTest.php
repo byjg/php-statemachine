@@ -9,6 +9,7 @@ use ByJG\StateMachine\TransitionActionInterface;
 use ByJG\StateMachine\TransitionConditionInterface;
 use ByJG\StateMachine\TransitionException;
 use PHPUnit\Framework\TestCase;
+use Tests\Fixture\Letter;
 
 class TransitionActionTest extends TestCase
 {
@@ -41,11 +42,11 @@ class TransitionActionTest extends TestCase
     public function testActionRunsOnlyForTheTransitionActuallyTaken(): void
     {
         $log = [];
-        $stA = new State("A");
-        $stB = new State("B");
-        $stC = new State("C");
+        $stA = Letter::A;
+        $stB = Letter::B;
+        $stC = Letter::C;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(Transition::create($stA, $stC, null, $this->recorder($log, "viaA")))
             ->addTransition(Transition::create($stB, $stC, null, $this->recorder($log, "viaB")));
 
@@ -75,11 +76,11 @@ class TransitionActionTest extends TestCase
     public function testOneActionSharedAcrossManyTransitions(): void
     {
         $log = [];
-        $stA = new State("A");
-        $stB = new State("B");
-        $stC = new State("C");
+        $stA = Letter::A;
+        $stB = Letter::B;
+        $stC = Letter::C;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransitions(
                 Transition::createMultiple([$stA, $stB], $stC, null, $this->recorder($log, "audit"))
             );
@@ -108,10 +109,10 @@ class TransitionActionTest extends TestCase
             }
         };
 
-        $stA = new State("A");
-        $stB = new State("B");
+        $stA = Letter::A;
+        $stB = Letter::B;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(Transition::create($stA, $stB, null, $action));
 
         $stateMachine->autoTransitionFrom($stA, ["qty" => 7])->process();
@@ -123,10 +124,10 @@ class TransitionActionTest extends TestCase
     public function testExplicitTransitionStampsTheState(): void
     {
         $log = [];
-        $stA = new State("A");
-        $stB = new State("B");
+        $stA = Letter::A;
+        $stB = Letter::B;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(Transition::create($stA, $stB, null, $this->recorder($log, "explicit")));
 
         $next = $stateMachine->transition($stA, $stB, ["k" => "v"]);
@@ -149,10 +150,10 @@ class TransitionActionTest extends TestCase
             }
         };
 
-        $stA = new State("A");
-        $stB = new State("B");
+        $stA = Letter::A;
+        $stB = Letter::B;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(Transition::create($stA, $stB, $never, $this->recorder($log, "never")));
 
         $this->assertNull($stateMachine->transition($stA, $stB, ["k" => "v"]));
@@ -161,21 +162,22 @@ class TransitionActionTest extends TestCase
 
     public function testExplicitTransitionReturnsNullForAnUndeclaredTransition(): void
     {
-        $stateMachine = FiniteStateMachine::createMachine([["A", "B"]]);
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class, [["A", "B"]]);
 
-        $this->assertNull($stateMachine->transition(new State("B"), new State("A")));
-        $this->assertNull($stateMachine->transition(new State("A"), new State("ZZ")));
+        // Both ends are states of the machine; there is simply no transition between them
+        $this->assertNull($stateMachine->transition(Letter::B, Letter::A));
+        $this->assertNull($stateMachine->transition(Letter::A, Letter::C));
     }
 
     public function testExplicitTransitionThrowsWhenConfiguredTo(): void
     {
-        $stateMachine = FiniteStateMachine::createMachine([["A", "B"]])
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class, [["A", "B"]])
             ->throwErrorIfCannotTransition();
 
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage("Cannot transition from B to A");
 
-        $stateMachine->transition(new State("B"), new State("A"));
+        $stateMachine->transition(Letter::B, Letter::A);
     }
 
     /**
@@ -184,10 +186,10 @@ class TransitionActionTest extends TestCase
     public function testStateTakenFromTheMachineIsNotStamped(): void
     {
         $log = [];
-        $stA = new State("A");
-        $stB = new State("B");
+        $stA = Letter::A;
+        $stB = Letter::B;
 
-        $stateMachine = FiniteStateMachine::createMachine()
+        $stateMachine = FiniteStateMachine::createMachine(Letter::class)
             ->addTransition(Transition::create($stA, $stB, null, $this->recorder($log, "viaA")));
 
         $loose = $stateMachine->state('B');
@@ -202,6 +204,7 @@ class TransitionActionTest extends TestCase
         $log = [];
 
         $stateMachine = FiniteStateMachine::createMachine(
+            Letter::class,
             [
                 ["A", "B", null, $this->recorder($log, "simple")],
             ]

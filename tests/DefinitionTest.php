@@ -9,9 +9,11 @@ use ByJG\StateMachine\TransitionActionInterface;
 use ByJG\StateMachine\TransitionConditionInterface;
 use ByJG\StateMachine\TransitionException;
 use PHPUnit\Framework\TestCase;
+use Tests\Fixture\Article;
 use Tests\Fixture\HasReviewer;
 use Tests\Fixture\NotACollaborator;
 use Tests\Fixture\RecordingAction;
+use Tests\Fixture\Stock;
 use Tests\Fixture\ThresholdCondition;
 
 /**
@@ -34,15 +36,15 @@ class DefinitionTest extends TestCase
         $condition = new HasReviewer();
         $action = new RecordingAction();
 
-        $stateMachine = FiniteStateMachine::createMachine([
-            ["DRAFT", "REVIEW", $condition, $action],
+        $stateMachine = FiniteStateMachine::createMachine(Article::class, [
+            [Article::Draft, Article::Review, $condition, $action],
         ]);
 
-        $transition = $stateMachine->getTransition($stateMachine->state("DRAFT"), $stateMachine->state("REVIEW"));
+        $transition = $stateMachine->getTransition(Article::Draft, Article::Review);
         $this->assertSame($action, $transition->getTransitionAction());
 
-        $this->assertFalse($stateMachine->canTransition($stateMachine->state("DRAFT"), $stateMachine->state("REVIEW"), []));
-        $this->assertTrue($stateMachine->canTransition($stateMachine->state("DRAFT"), $stateMachine->state("REVIEW"), ["reviewer" => "ana"]));
+        $this->assertFalse($stateMachine->canTransition(Article::Draft, Article::Review, []));
+        $this->assertTrue($stateMachine->canTransition(Article::Draft, Article::Review, ["reviewer" => "ana"]));
     }
 
     /**
@@ -50,14 +52,14 @@ class DefinitionTest extends TestCase
      */
     public function testACollaboratorNamedByClassIsBuiltAndWiredUp(): void
     {
-        $stateMachine = FiniteStateMachine::createMachine([
-            ["DRAFT", "REVIEW", HasReviewer::class, RecordingAction::class],
+        $stateMachine = FiniteStateMachine::createMachine(Article::class, [
+            [Article::Draft, Article::Review, HasReviewer::class, RecordingAction::class],
         ]);
 
         // The condition really governs the move
-        $this->assertNull($stateMachine->autoTransitionFrom($stateMachine->state("DRAFT"), []));
+        $this->assertNull($stateMachine->autoTransitionFrom(Article::Draft, []));
 
-        $next = $stateMachine->autoTransitionFrom($stateMachine->state("DRAFT"), ["reviewer" => "ana"]);
+        $next = $stateMachine->autoTransitionFrom(Article::Draft, ["reviewer" => "ana"]);
         $this->assertEquals("REVIEW", $next->getState());
 
         // ...and so does the action, still only when the caller asks for it
@@ -68,13 +70,13 @@ class DefinitionTest extends TestCase
 
     public function testTheSameClassNamedTwiceYieldsOneSharedInstance(): void
     {
-        $stateMachine = FiniteStateMachine::createMachine([
-            ["DRAFT", "REVIEW", null, RecordingAction::class],
-            ["REVIEW", "PUBLISHED", null, RecordingAction::class],
+        $stateMachine = FiniteStateMachine::createMachine(Article::class, [
+            [Article::Draft, Article::Review, null, RecordingAction::class],
+            [Article::Review, Article::Published, null, RecordingAction::class],
         ]);
 
-        $first = $stateMachine->getTransition($stateMachine->state("DRAFT"), $stateMachine->state("REVIEW"));
-        $second = $stateMachine->getTransition($stateMachine->state("REVIEW"), $stateMachine->state("PUBLISHED"));
+        $first = $stateMachine->getTransition(Article::Draft, Article::Review);
+        $second = $stateMachine->getTransition(Article::Review, Article::Published);
 
         $this->assertSame($first->getTransitionAction(), $second->getTransitionAction());
     }
@@ -88,12 +90,13 @@ class DefinitionTest extends TestCase
         $container = [ThresholdCondition::class => new ThresholdCondition(20)];
 
         $stateMachine = FiniteStateMachine::createMachine(
-            [["EMPTY", "IN_STOCK", ThresholdCondition::class]],
+            Stock::class,
+            [[Stock::Depleted, Stock::InStock, ThresholdCondition::class]],
             fn (string $name): object => $container[$name]
         );
 
-        $from = $stateMachine->state("EMPTY");
-        $to = $stateMachine->state("IN_STOCK");
+        $from = Stock::Depleted;
+        $to = Stock::InStock;
 
         $this->assertTrue($stateMachine->canTransition($from, $to, ["qty" => 25]));
         $this->assertFalse($stateMachine->canTransition($from, $to, ["qty" => 5]));
@@ -108,7 +111,7 @@ class DefinitionTest extends TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage("The class 'Tests\Fixture\HasReviwer' declared as");
 
-        FiniteStateMachine::createMachine([
+        FiniteStateMachine::createMachine(Article::class, [
             ["DRAFT", "REVIEW", "Tests\Fixture\HasReviwer"],
         ]);
     }
@@ -118,7 +121,7 @@ class DefinitionTest extends TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage("must implement " . TransitionActionInterface::class);
 
-        FiniteStateMachine::createMachine([
+        FiniteStateMachine::createMachine(Article::class, [
             ["DRAFT", "REVIEW", null, HasReviewer::class],
         ]);
     }
@@ -128,7 +131,7 @@ class DefinitionTest extends TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage("must implement " . TransitionConditionInterface::class);
 
-        FiniteStateMachine::createMachine([
+        FiniteStateMachine::createMachine(Article::class, [
             ["DRAFT", "REVIEW", NotACollaborator::class],
         ]);
     }
@@ -139,29 +142,30 @@ class DefinitionTest extends TestCase
      */
     public function testStateNamesAreMatchedRegardlessOfCase(): void
     {
-        $stateMachine = FiniteStateMachine::createMachine([
+        $stateMachine = FiniteStateMachine::createMachine(Article::class, [
             ["draft", "Review"],
             ["DRAFT", "published"],
         ]);
 
-        $this->assertCount(2, $stateMachine->possibleTransitions($stateMachine->state("DRAFT")));
-        $this->assertTrue($stateMachine->isInitialState($stateMachine->state("draft")));
-        $this->assertNotNull($stateMachine->getTransition($stateMachine->state("DRAFT"), $stateMachine->state("REVIEW")));
+        $this->assertCount(2, $stateMachine->possibleTransitions("DRAFT"));
+        $this->assertTrue($stateMachine->isInitialState("draft"));
+        $this->assertNotNull($stateMachine->getTransition("DRAFT", "REVIEW"));
     }
 
     public function testBuildsAMachineFromADefinitionArray(): void
     {
         $stateMachine = FiniteStateMachine::fromDefinition([
+            "enum" => Article::class,
             "transitions" => [
                 ["from" => "DRAFT", "to" => "REVIEW", "condition" => HasReviewer::class],
                 ["from" => "REVIEW", "to" => "PUBLISHED", "action" => RecordingAction::class],
             ],
         ]);
 
-        $this->assertTrue($stateMachine->isInitialState($stateMachine->state("DRAFT")));
-        $this->assertTrue($stateMachine->isFinalState($stateMachine->state("PUBLISHED")));
+        $this->assertTrue($stateMachine->isInitialState(Article::Draft));
+        $this->assertTrue($stateMachine->isFinalState(Article::Published));
 
-        $published = $stateMachine->transition($stateMachine->state("REVIEW"), $stateMachine->state("PUBLISHED"));
+        $published = $stateMachine->transition(Article::Review, Article::Published);
         $published->process();
         $this->assertEquals(["REVIEW->PUBLISHED"], RecordingAction::$log);
     }
@@ -173,17 +177,51 @@ class DefinitionTest extends TestCase
     public function testAListOfOriginStatesFansOutIntoOneTransitionEach(): void
     {
         $stateMachine = FiniteStateMachine::fromDefinition([
+            "enum" => Stock::class,
             "transitions" => [
                 ["from" => ["LAST_UNITS", "OUT_OF_STOCK"], "to" => "RESUPPLIED", "action" => RecordingAction::class],
             ],
         ]);
 
-        $fromLastUnits = $stateMachine->getTransition($stateMachine->state("LAST_UNITS"), $stateMachine->state("RESUPPLIED"));
-        $fromOutOfStock = $stateMachine->getTransition($stateMachine->state("OUT_OF_STOCK"), $stateMachine->state("RESUPPLIED"));
+        $fromLastUnits = $stateMachine->getTransition(Stock::LastUnits, Stock::Resupplied);
+        $fromOutOfStock = $stateMachine->getTransition(Stock::OutOfStock, Stock::Resupplied);
 
         $this->assertNotNull($fromLastUnits);
         $this->assertNotNull($fromOutOfStock);
         $this->assertSame($fromLastUnits->getTransitionAction(), $fromOutOfStock->getTransitionAction());
+    }
+
+    /**
+     * Without the enum the file could not say which states exist, so every name in it would be
+     * taken on trust — which is exactly what the binding is there to stop.
+     */
+    public function testADefinitionWithoutAnEnumIsRejected(): void
+    {
+        $this->expectException(TransitionException::class);
+        $this->expectExceptionMessage("must declare the 'enum' naming its states");
+
+        FiniteStateMachine::fromDefinition([
+            "transitions" => [
+                ["from" => "DRAFT", "to" => "REVIEW"],
+            ],
+        ]);
+    }
+
+    /**
+     * A state name in the file that the enum does not declare — a stale entry left behind by a
+     * rename, typically — is rejected when the file is read.
+     */
+    public function testADefinitionNamingAStateTheEnumDoesNotDeclareIsRejected(): void
+    {
+        $this->expectException(TransitionException::class);
+        $this->expectExceptionMessage("'RETIRED' is not a state of this machine");
+
+        FiniteStateMachine::fromDefinition([
+            "enum" => Article::class,
+            "transitions" => [
+                ["from" => "PUBLISHED", "to" => "RETIRED"],
+            ],
+        ]);
     }
 
     public function testADefinitionWithoutATransitionsListIsRejected(): void
@@ -191,7 +229,7 @@ class DefinitionTest extends TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage("must declare a 'transitions' list");
 
-        FiniteStateMachine::fromDefinition(["states" => ["DRAFT"]]);
+        FiniteStateMachine::fromDefinition(["enum" => Article::class, "states" => ["DRAFT"]]);
     }
 
     public function testATransitionMissingAnEndIsRejected(): void
@@ -200,6 +238,7 @@ class DefinitionTest extends TestCase
         $this->expectExceptionMessage("The transition #1 must declare both 'from' and 'to'");
 
         FiniteStateMachine::fromDefinition([
+            "enum" => Article::class,
             "transitions" => [
                 ["from" => "DRAFT", "to" => "REVIEW"],
                 ["from" => "REVIEW"],
@@ -218,15 +257,15 @@ class DefinitionTest extends TestCase
         $stateMachine = FiniteStateMachine::fromDefinition($definition);
 
         // The graph declared in the file
-        $this->assertTrue($stateMachine->isInitialState($stateMachine->state("DRAFT")));
-        $this->assertTrue($stateMachine->isFinalState($stateMachine->state("ARCHIVED")));
-        $this->assertCount(1, $stateMachine->possibleTransitions($stateMachine->state("DRAFT")));
-        $this->assertCount(2, $stateMachine->possibleTransitions($stateMachine->state("REVIEW")));
+        $this->assertTrue($stateMachine->isInitialState(Article::Draft));
+        $this->assertTrue($stateMachine->isFinalState(Article::Archived));
+        $this->assertCount(1, $stateMachine->possibleTransitions(Article::Draft));
+        $this->assertCount(2, $stateMachine->possibleTransitions(Article::Review));
 
         // The condition named in the file governs the move
-        $this->assertNull($stateMachine->autoTransitionFrom($stateMachine->state("DRAFT"), ["reviewer" => ""]));
+        $this->assertNull($stateMachine->autoTransitionFrom(Article::Draft, ["reviewer" => ""]));
 
-        $review = $stateMachine->autoTransitionFrom($stateMachine->state("DRAFT"), ["reviewer" => "ana"]);
+        $review = $stateMachine->autoTransitionFrom(Article::Draft, ["reviewer" => "ana"]);
         $this->assertEquals("REVIEW", $review->getState());
         $this->assertEquals("DRAFT", $review->getPreviousState()->getState());
 
@@ -245,24 +284,19 @@ class DefinitionTest extends TestCase
             Serialize::fromYaml((string)file_get_contents(__DIR__ . "/fixtures/machine.yaml"))->toArray()
         );
 
-        $stDraft = new State("DRAFT");
-        $stReview = new State("REVIEW");
-        $stPublished = new State("PUBLISHED");
-        $stArchived = new State("ARCHIVED");
-
-        $fromPhp = FiniteStateMachine::createMachine([
-            ["DRAFT", "REVIEW", new HasReviewer(), new RecordingAction()],
-            ["REVIEW", "PUBLISHED", null, new RecordingAction()],
-            ["REVIEW", "ARCHIVED"],
-            ["PUBLISHED", "ARCHIVED"],
+        $fromPhp = FiniteStateMachine::createMachine(Article::class, [
+            [Article::Draft, Article::Review, new HasReviewer(), new RecordingAction()],
+            [Article::Review, Article::Published, null, new RecordingAction()],
+            [Article::Review, Article::Archived],
+            [Article::Published, Article::Archived],
         ]);
 
-        foreach ([$stDraft, $stReview, $stPublished, $stArchived] as $from) {
-            foreach ([$stDraft, $stReview, $stPublished, $stArchived] as $to) {
+        foreach (Article::cases() as $from) {
+            foreach (Article::cases() as $to) {
                 $this->assertEquals(
                     !is_null($fromPhp->getTransition($from, $to)),
                     !is_null($fromYaml->getTransition($from, $to)),
-                    "{$from} -> {$to} differs between the YAML and the PHP definition"
+                    "{$from->value} -> {$to->value} differs between the YAML and the PHP definition"
                 );
             }
         }
