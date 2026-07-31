@@ -102,7 +102,8 @@ class FiniteStateMachine
                     $transition[0],
                     $transition[1],
                     $stateMachine->resolve($transition[2] ?? null, TransitionConditionInterface::class),
-                    $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class)
+                    $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class),
+                    $transition[4] ?? null
                 )
             );
         }
@@ -136,6 +137,22 @@ class FiniteStateMachine
         }
 
         return $name;
+    }
+
+    /**
+     * Every move joining a pair of states, in declaration order.
+     *
+     * @param string $currentState
+     * @param string $desiredState
+     * @return Transition[]
+     */
+    protected function transitionsBetween(string $currentState, string $desiredState): array
+    {
+        return array_values(array_filter(
+            $this->transitionList,
+            fn (string $key): bool => str_starts_with($key, "{$currentState}___{$desiredState}___"),
+            ARRAY_FILTER_USE_KEY
+        ));
     }
 
     /**
@@ -206,7 +223,13 @@ class FiniteStateMachine
             }
 
             foreach ((array)$entry["from"] as $from) {
-                $transitionList[] = [$from, $entry["to"], $entry["condition"] ?? null, $entry["action"] ?? null];
+                $transitionList[] = [
+                    $from,
+                    $entry["to"],
+                    $entry["condition"] ?? null,
+                    $entry["action"] ?? null,
+                    $entry["name"] ?? null,
+                ];
             }
         }
 
@@ -276,9 +299,9 @@ class FiniteStateMachine
         return $this;
     }
 
-    protected function getKey(string $currentState, string $desiredState): string
+    protected function getKey(string $currentState, string $desiredState, string $name = ""): string
     {
-        return $currentState . "___" . $desiredState;
+        return $currentState . "___" . $desiredState . "___" . $name;
     }
 
     /**
@@ -292,16 +315,27 @@ class FiniteStateMachine
      */
     public function addTransition(Transition $transition): static
     {
-        $key = $this->getKey(
-            $this->stateName($transition->getCurrentState()),
-            $this->stateName($transition->getDesiredState())
-        );
+        $from = $this->stateName($transition->getCurrentState());
+        $to = $this->stateName($transition->getDesiredState());
+        $key = $this->getKey($from, $to, $transition->getName());
 
         if (isset($this->transitionList[$key])) {
             throw new TransitionException(
-                "A transition from {$transition->getCurrentState()} to {$transition->getDesiredState()} "
-                . "is already defined. Combine the rules into a single condition instead of declaring it twice."
+                "A transition {$transition->describe()} is already defined. Two moves between the "
+                . "same pair of states must be told apart by a name — DRAFT to PAID by PIX and by "
+                . "card are two transitions, not one declared twice."
             );
+        }
+
+        // An unnamed move is only unambiguous while it is the only way between those two states.
+        // Mixing one with a named move leaves the pair identifying neither.
+        foreach ($this->transitionsBetween($from, $to) as $other) {
+            if ($other->getName() === "" || $transition->getName() === "") {
+                throw new TransitionException(
+                    "{$from} and {$to} are joined more than once, so every move between them must "
+                    . "be named. Name them all, or merge them into one transition."
+                );
+            }
         }
 
         $this->transitionList[$key] = $transition;
@@ -326,7 +360,7 @@ class FiniteStateMachine
         $currentState = $this->stateName($currentState);
 
         $next = array_map(function ($key, $value) use ($currentState) {
-            if (strpos($key, "{$currentState}___") === 0) {
+            if (str_starts_with($key, "{$currentState}___")) {
                 return $value;
             }
             return null;
@@ -337,11 +371,28 @@ class FiniteStateMachine
 
     public function getTransition(
         string|\UnitEnum|State $currentState,
-        string|\UnitEnum|State $desiredState
+        string|\UnitEnum|State $desiredState,
+        string|\UnitEnum|null $name = null
     ): ?Transition {
-        $key = $this->getKey($this->stateName($currentState), $this->stateName($desiredState));
+        $from = $this->stateName($currentState);
+        $to = $this->stateName($desiredState);
 
-        return $this->transitionList[$key] ?? null;
+        if (!is_null($name)) {
+            return $this->transitionList[$this->getKey($from, $to, State::nameOf($name))] ?? null;
+        }
+
+        // No name given: the pair identifies the move only while it is the only one
+        $matched = $this->transitionsBetween($from, $to);
+
+        if (count($matched) > 1) {
+            throw new TransitionException(
+                "There is more than one transition from {$from} to {$to}: "
+                . implode(", ", array_map(fn (Transition $t): string => $t->getName(), $matched))
+                . ". Name the one you mean."
+            );
+        }
+
+        return $matched[0] ?? null;
     }
 
     /**
@@ -383,7 +434,9 @@ class FiniteStateMachine
 
         if (count($matched) > 1) {
             $candidates = implode(", ", array_map(
-                fn (Transition $item): string => $item->getDesiredState()->getState(),
+                fn (Transition $item): string => $item->getName() === ""
+                    ? $item->getDesiredState()->getState()
+                    : "{$item->getDesiredState()} ({$item->getName()})",
                 $matched
             ));
             throw new TransitionException(
@@ -413,7 +466,7 @@ class FiniteStateMachine
     protected function arrive(Transition $transition, ?array $data): State
     {
         $state = $transition->getDesiredState($data);
-        $state->arrivedThrough($transition->getCurrentState(), $transition->getTransitionAction());
+        $state->arrivedThrough($transition);
 
         return $state;
     }
@@ -436,9 +489,10 @@ class FiniteStateMachine
     public function transition(
         string|\UnitEnum|State $currentState,
         string|\UnitEnum|State $desiredState,
-        ?array $data = null
+        ?array $data = null,
+        string|\UnitEnum|null $name = null
     ): ?State {
-        $transition = $this->getTransition($currentState, $desiredState);
+        $transition = $this->getTransition($currentState, $desiredState, $name);
         $allowed = !empty($transition) && $transition->runTransitionFunction($data);
 
         if (!$allowed) {
@@ -461,9 +515,10 @@ class FiniteStateMachine
     public function canTransition(
         string|\UnitEnum|State $currentState,
         string|\UnitEnum|State $desiredState,
-        ?array $data = null
+        ?array $data = null,
+        string|\UnitEnum|null $name = null
     ): bool {
-        $result = $this->checkIfCanTransition($currentState, $desiredState, $data);
+        $result = $this->checkIfCanTransition($currentState, $desiredState, $data, $name);
 
         if ($this->throwError && !$result) {
             throw new TransitionException(
@@ -478,9 +533,10 @@ class FiniteStateMachine
     protected function checkIfCanTransition(
         string|\UnitEnum|State $currentState,
         string|\UnitEnum|State $desiredState,
-        ?array $data = null
+        ?array $data = null,
+        string|\UnitEnum|null $name = null
     ): bool {
-        $transition = $this->getTransition($currentState, $desiredState);
+        $transition = $this->getTransition($currentState, $desiredState, $name);
 
         if (empty($transition)) {
             return false;

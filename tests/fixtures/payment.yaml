@@ -1,0 +1,19 @@
+enum: 'Tests\Fixture\Payment'
+
+transitions:
+  # Three ways of paying: the same pair of states, three moves, told apart by name
+  - name: PIX
+    from: DRAFT
+    to: PAID
+    condition: 'Tests\Fixture\PaidByPix'
+    action: 'Tests\Fixture\ConfirmPix'
+
+  - name: CARD
+    from: DRAFT
+    to: PAID
+    condition: 'Tests\Fixture\PaidByCard'
+    action: 'Tests\Fixture\CapturePreAuth'
+
+  # Unnamed: this pair is joined once, so the pair already says which move it is
+  - from: DRAFT
+    to: CANCELLED

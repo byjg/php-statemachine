@@ -134,6 +134,79 @@ $stateMachine->autoTransitionFrom(ArticleState::Draft, $data);
 
 `Serialize::fromJson()` works the same way, as does any other parser that produces an array.
 
+### The complete format
+
+Five keys, two of them required:
+
+```yaml
+enum: 'App\Fsm\OrderState'          # REQUIRED — its cases are the states of the machine
+
+transitions:                         # REQUIRED — a list, evaluated in the order written
+  - from: DRAFT                      # REQUIRED — a case value, or a list of them
+    to: PAID                         # REQUIRED — a case value
+    name: PIX                        # optional — tells apart several moves joining one pair
+    condition: 'App\Fsm\PaidByPix'   # optional — a TransitionConditionInterface class
+    action: 'App\Fsm\ConfirmPix'     # optional — a TransitionActionInterface class
+```
+
+| key | required | value |
+|---|---|---|
+| `enum` | yes | class name of the enum whose cases are the states |
+| `transitions` | yes | list of entries, each one a move |
+| `transitions[].from` | yes | a case value, or a list of them to declare the move out of several states |
+| `transitions[].to` | yes | a case value |
+| `transitions[].name` | no | required *only* when the same pair of states is joined more than once |
+| `transitions[].condition` | no | class implementing `TransitionConditionInterface`; the move is always allowed without one |
+| `transitions[].action` | no | class implementing `TransitionActionInterface`; run by `process()`, never by the machine |
+
+Quote the class names. `condition: App\Fsm\PaidByPix` unquoted happens to work, because YAML
+treats a backslash literally in a plain scalar, but single quotes say so on purpose.
+
+Everything in the file is checked when it is read: `enum` must be an enum, every `from` and `to`
+must be one of its cases, and every `condition` and `action` must exist and implement the right
+interface.
+
+### Naming the routes into a state
+
+When one pair of states is joined by more than one move — paid by PIX, by card, by transfer —
+each move is named, and each carries its own condition and its own action:
+
+```yaml
+transitions:
+  - name: PIX
+    from: DRAFT
+    to: PAID
+    condition: 'App\Fsm\PaidByPix'
+    action: 'App\Fsm\ConfirmPix'
+
+  - name: CARD
+    from: DRAFT
+    to: PAID
+    condition: 'App\Fsm\PaidByCard'
+    action: 'App\Fsm\CapturePreAuth'
+
+  - from: DRAFT          # unnamed: this pair is joined once, so the pair says which move it is
+    to: CANCELLED
+```
+
+`autoTransitionFrom()` needs nothing extra — it evaluates the conditions of every move leaving the
+state, and their sharing a destination changes nothing:
+
+```php
+$paid = $machine->autoTransitionFrom(OrderState::Draft, ['method' => 'CARD']);
+
+$paid->getState();            // 'PAID'
+$paid->getTransitionName();   // 'CARD'  <- which route got you here, worth persisting
+$paid->process();             // runs CapturePreAuth, and only that
+```
+
+Two rules the file is held to, both reported when it is read:
+
+- **Two moves joining one pair must both be named.** An unnamed move next to a named one leaves
+  the pair identifying neither, so it is rejected rather than left to fail later at lookup.
+- **Names are compared uppercased**, like state names. `PIX` and `pix` in the same file are one
+  name declared twice, not two routes.
+
 ### Several origin states at once
 
 A list in `from` declares the same move out of every state in it. It is the declarative form of
@@ -146,6 +219,9 @@ state is declared once:
     condition: 'App\Fsm\WasFulfilled'
     action: 'App\Fsm\NotifyPurchasing'
 ```
+
+A `name` on such an entry is shared by every transition it produces, which is legal because they
+start from different states.
 
 ## What belongs in the definition
 

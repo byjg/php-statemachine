@@ -339,7 +339,7 @@ class FiniteStateMachineTest extends TestCase
             ->addTransition(new Transition($stA, $stB, $never));
 
         $this->expectException(TransitionException::class);
-        $this->expectExceptionMessage("A transition from A to B is already defined");
+        $this->expectExceptionMessage("A transition A -> B is already defined");
 
         $stateMachine->addTransition(new Transition($stA, $stB));
     }
@@ -425,7 +425,7 @@ class FiniteStateMachineTest extends TestCase
     public function testDuplicatedTransitionIsRejectedInSimpleMode(): void
     {
         $this->expectException(TransitionException::class);
-        $this->expectExceptionMessage("A transition from A to B is already defined");
+        $this->expectExceptionMessage("A transition A -> B is already defined");
 
         FiniteStateMachine::createMachine(
             Letter::class,

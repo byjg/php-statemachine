@@ -3,6 +3,7 @@
 namespace Tests;
 
 use ByJG\StateMachine\State;
+use ByJG\StateMachine\Transition;
 use ByJG\StateMachine\TransitionActionInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -66,7 +67,7 @@ class StateTest extends TestCase
 
         $state = new State('TO_STATE');
         $state->setData(['value']);
-        $state->arrivedThrough(new State('FROM_STATE'), $action);
+        $state->arrivedThrough(new Transition('FROM_STATE', 'TO_STATE', null, $action));
 
         $this->assertEquals('FROM_STATE', $state->getPreviousState()->getState());
         $this->assertEquals([], $received);
@@ -85,7 +86,7 @@ class StateTest extends TestCase
     public function testProcessIsNoOpWhenTheTransitionHasNoAction(): void
     {
         $state = new State('TO_STATE');
-        $state->arrivedThrough(new State('FROM_STATE'), null);
+        $state->arrivedThrough(new Transition('FROM_STATE', 'TO_STATE'));
 
         $this->assertEquals('FROM_STATE', $state->getPreviousState()->getState());
 

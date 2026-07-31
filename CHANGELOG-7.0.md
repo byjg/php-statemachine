@@ -32,6 +32,7 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
 | **Action interface** | `StateActionInterface::execute(?array $data): void` | `TransitionActionInterface::execute(State $from, State $to, ?array $data): void` |
 | **Where actions are declared** | on the `State` | 4th argument of `Transition`, `Transition::create()` and `Transition::createMultiple()` |
 | **`$state->process()`** | ran the state's own action | runs the action of the transition the state was reached through |
+| **`State::arrivedThrough()`** | — | takes the `Transition`, not `(State, ?action)` |
 | **Standalone processing** | `$fsm->state('C')->process()` ran C's action | no-op — that state was not reached by a transition |
 
 ### Removed
@@ -48,11 +49,18 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   through. Returns `null` when the move is not allowed, or throws under
   `throwErrorIfCannotTransition()`. This is the counterpart of `autoTransitionFrom()` for when
   you already know both ends, and the only safe way to obtain a processable state on that path.
-- `State::arrivedThrough(State $from, ?TransitionActionInterface $action): void` — records the
-  transition a state was reached through. Called by the state machine.
+- `State::arrivedThrough(Transition $transition): void` — records the transition a state was
+  reached through. Called by the state machine.
 - `State::getPreviousState(): ?State` — the state this one was reached from, or `null`.
 - `State::nameOf($ref): string` — the name a reference refers to. Internal; the machine and
   `Transition` use it to accept a case, a string or a `State` interchangeably.
+- **Named transitions.** Two states may be joined by more than one move when the moves are named —
+  `DRAFT` to `PAID` by PIX, by card and by transfer are three transitions with three conditions and
+  three actions. `Transition::named()`, a 5th argument on `Transition::__construct()`/`create()`/
+  `createMultiple()`, a `name` key in a definition, and a 4th argument on `getTransition()`,
+  `canTransition()` and `transition()` to pick a route. `State::getTransitionName()` reports which
+  route was taken, so it can be persisted next to the state. Two *unnamed* moves between the same
+  pair remain a declaration error.
 - A 4th optional argument for the transition action on `Transition::__construct()`,
   `Transition::create()` and `Transition::createMultiple()`.
 - A 4th slot in the `createMachine()` array form: `[$from, $to, $condition, $action]`.
@@ -61,8 +69,9 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   `createMachine()` takes a resolver — any `callable(string): object`, so `[$container, 'get']`
   works — for collaborators that need constructor arguments.
 - `FiniteStateMachine::fromDefinition(array $definition, ?callable $resolver = null)` — builds a
-  machine from an `['enum' => ..., 'transitions' => [['from' => ..., 'to' => ..., 'condition' => ..., 'action' => ...]]]`
-  array, where `from` may be a list to declare the same move out of several states. The
+  machine from an `['enum' => ..., 'transitions' => [['name' => ..., 'from' => ..., 'to' => ..., 'condition' => ..., 'action' => ...]]]`
+  array, where `from` may be a list to declare the same move out of several states and `name`
+  distinguishes several moves joining the same pair. The
   definition is a plain array, so YAML/JSON parsing stays outside this package and it keeps
   requiring nothing but PHP. See [Declarative Definition](docs/declarative-definition.md).
 

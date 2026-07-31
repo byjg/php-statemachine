@@ -25,6 +25,8 @@ class State
 
     protected ?TransitionActionInterface $transitionAction = null;
 
+    protected ?string $transitionName = null;
+
     /**
      * Name a state to the machine with an enum case or a string, not with a new State.
      *
@@ -92,13 +94,27 @@ class State
      * Called by the state machine when a transition is performed. A state that was not
      * produced by a transition has no origin and no action, and process() does nothing.
      *
-     * @param State $from A copy of the state moved away from
-     * @param TransitionActionInterface|null $action The action of the transition taken
+     * @internal Called by FiniteStateMachine.
+     * @param Transition $transition The transition taken
      */
-    public function arrivedThrough(State $from, ?TransitionActionInterface $action): void
+    public function arrivedThrough(Transition $transition): void
     {
-        $this->previousState = $from;
-        $this->transitionAction = $action;
+        $this->previousState = $transition->getCurrentState();
+        $this->transitionAction = $transition->getTransitionAction();
+        $this->transitionName = $transition->getName();
+    }
+
+    /**
+     * The name of the transition this state was reached through, or null when it was not
+     * reached by a transition.
+     *
+     * Empty string when the transition was not named. This is what tells apart the routes into
+     * a state that several transitions lead to — which of PIX, card or transfer got you to PAID
+     * — so it is worth persisting alongside the state itself.
+     */
+    public function getTransitionName(): ?string
+    {
+        return $this->transitionName;
     }
 
     /**
