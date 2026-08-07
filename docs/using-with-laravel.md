@@ -7,16 +7,21 @@ sidebar_position: 6
 This component requires nothing but PHP, and integrating it needs no bridge package and no
 adapter class. Laravel already speaks the three things it takes:
 
-| Laravel | plugs into | glue |
-|---|---|---|
-| the service container | the resolver — `[app(), 'get']` | none |
-| `config('...')` returning an array | `fromDefinition()` | none |
-| an Eloquent enum cast | the state reference | none |
+| Laravel                            | plugs into                      | glue |
+|------------------------------------|---------------------------------|------|
+| the service container              | the resolver — `[app(), 'get']` | none |
+| `config('...')` returning an array | `fromDefinition()`              | none |
+| an Eloquent enum cast              | the state reference             | none |
 
 The last one is the reason this fits so cleanly. A model with an enum cast hands you
 `$order->status` as an enum case, which is exactly what every method of the machine accepts.
 The persistence layer and the state machine agree on the type without anyone converting
 anything.
+
+This page shows the whole integration by hand. It is four lines, and knowing them is worth more
+than any package that hides them. If you would rather not maintain those four lines and the two
+traps that come after them, [`byjg/gluo-laravel`](https://github.com/byjg/php-gluo-laravel) ships
+them as a connector — see [the end of this page](#doing-it-with-gluo-for-laravel).
 
 ## The states
 
@@ -131,8 +136,17 @@ if ($next !== null) {
 }
 ```
 
-`$order->status` goes in as an enum case and `$next->getState()` comes out as the string the case
-corresponds to, which is what `OrderState::from()` wants.
+:::warning
+`OrderState::from($next->getState())` works **only because every case value above is uppercase**.
+State names are uppercased by the component, so an enum written `case Paid = 'paid'` makes that
+line throw a `ValueError` at runtime. Match the case values to the state names, or map the name
+back to its case yourself:
+
+```php
+$case = collect(OrderState::cases())
+    ->first(fn ($case) => strtoupper($case->value) === $next->getState());
+```
+:::
 
 ## Transactions: the one real hazard
 
@@ -183,9 +197,66 @@ public function test_the_order_machine_is_well_formed(): void
 }
 ```
 
-## What is deliberately not here
+## Doing it with Gluo for Laravel
 
-There is no `byjg/statemachine-laravel` package, because there is nothing for it to do that the
-four lines above do not. If you want `$order->transitionTo(OrderState::Paid, $data)` as a trait on
-your models, write it in your application — it is a wrapper around the block under
-[Moving a model](#moving-a-model), and it belongs where your models are.
+Everything above is code you own and maintain. Two parts of it are the same in every project and
+are easy to get subtly wrong: the transaction ordering, and mapping a state name back to its enum
+case. [`byjg/gluo-laravel`](https://github.com/byjg/php-gluo-laravel) ships them as a connector.
+
+```bash
+composer require byjg/gluo-laravel byjg/statemachine
+```
+
+Machines move into `config/gluo.php` under `gluo.statemachine.machines`, in the same format
+`fromDefinition()` reads, and no service provider is written at all:
+
+```php
+'statemachine' => [
+    'machines' => [
+        'order' => [
+            'enum' => App\Enums\OrderState::class,
+            'transitions' => [
+                ['from' => 'DRAFT', 'to' => 'PAID', 'condition' => App\Fsm\PaymentCleared::class,
+                                                    'action'    => App\Fsm\SendReceipt::class],
+                ['from' => ['DRAFT', 'PAID'], 'to' => 'CANCELLED'],
+            ],
+        ],
+    ],
+],
+```
+
+The model declares which machine governs it, and the block under
+[Moving a model](#moving-a-model) becomes one call:
+
+```php
+use ByJG\Gluo\Laravel\StateMachine\HasStateMachine;
+use ByJG\Gluo\Laravel\StateMachine\StatefulModel;
+
+class Order extends Model implements StatefulModel
+{
+    use HasStateMachine;
+
+    protected $casts = ['status' => OrderState::class];
+}
+```
+
+```php
+DB::transaction(function () use ($order, $data) {
+    $order->autoTransition($data);
+
+    $this->somethingElseThatMayThrow();      // rolls back: the receipt never goes out
+});
+```
+
+| Written by hand | Through the connector |
+|---|---|
+| One singleton per machine | Machines declared as configuration, built and validated once |
+| `OrderState::from($next->getState())` — breaks on lowercase case values | The state is resolved back to its case through the enum the definition names |
+| `persist → process`, and `process` moved outside `DB::transaction()` by hand | `Connection::afterCommit()`: runs after the commit, never after a rollback |
+| An illegal move requested by a client throws | A `CanTransitionTo` validation rule answers `422` |
+| A hand-written test per machine | A published test that checks every declared machine |
+
+The connector wraps none of the component's API: `$order->stateMachine()` hands back the
+`FiniteStateMachine` itself, so everything on this page still applies.
+
+**[State machine connector guide →](https://github.com/byjg/php-gluo-laravel/blob/master/docs/state-machine.md)**
