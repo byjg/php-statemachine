@@ -6,3 +6,4 @@ nbproject/private
 phpunit.coverage.xml
 phpunit.report.xml
 *.bak
+/examples/
