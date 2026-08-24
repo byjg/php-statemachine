@@ -73,6 +73,28 @@ $notify = new class implements TransitionActionInterface {
 $transitionB_D = new Transition(Letter::B, Letter::D, $condition, $notify);
 ```
 
+The condition and the action are both declared here, on the transition, but they run at different
+moments:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant FSM as FiniteStateMachine
+    participant D as State D
+    You->>FSM: transition(B, D, data)
+    FSM->>FSM: 1. condition->canTransition(data)
+    FSM-->>You: 2. State D, stamped with the transition taken
+    You->>D: 3. process()
+    D->>D: action->execute(B, D, data)
+```
+
+Step 3 is yours to call — the machine stops at step 2. And the action that runs is the one
+belonging to the transition taken in step 1, which is why the same state can behave differently
+depending on the route into it.
+
+Note what the call takes and what it does not: the condition and the action were fixed when the
+transition was declared, so moving only needs the two ends and the data.
+
 :::info
 The two interfaces do different jobs. `TransitionConditionInterface` **decides** whether the
 transition may happen and must be free of side effects, since a condition may be evaluated

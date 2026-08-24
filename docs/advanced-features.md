@@ -36,6 +36,16 @@ not: an order goes from `DRAFT` to `PAID` by PIX, by card or by bank transfer, a
 moves with three conditions and three side effects. Collapsing them into one transition would lose
 exactly what distinguishes them.
 
+There is still one `PAID` state — a state is a case of the enum and cannot be duplicated. What is
+duplicated is the arrow, and the name is what tells one arrow from the other:
+
+```mermaid
+flowchart LR
+    D[Draft] -- "PIX<br/>PaidByPix / ConfirmPix" --> P[Paid]
+    D -- "CARD<br/>PaidByCard / CapturePreAuth" --> P
+    D -- "ETF<br/>PaidByEtf / Reconcile" --> P
+```
+
 ```php
 $stateMachine = FiniteStateMachine::createMachine(OrderState::class)
     ->addTransition(Transition::named('PIX',  OrderState::Draft, OrderState::Paid, new PaidBy('PIX'),  $confirmPix))
@@ -83,6 +93,24 @@ Once two states are joined more than once, the pair alone no longer identifies a
 $stateMachine->canTransition(OrderState::Draft, OrderState::Paid, $data, 'PIX');
 $paid = $stateMachine->transition(OrderState::Draft, OrderState::Paid, $data, 'PIX');
 ```
+
+The name is what picks the arrow, and the arrow is what decides which condition is asked and which
+action ends up running:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant FSM as FiniteStateMachine
+    participant P as State PAID
+    You->>FSM: transition(Draft, Paid, data, 'PIX')
+    FSM->>FSM: 1. PaidByPix->canTransition(data)
+    FSM-->>You: 2. State PAID, getTransitionName() === 'PIX'
+    You->>P: 3. process()
+    P->>P: ConfirmPix->execute(Draft, Paid, data)
+```
+
+Drop the `'PIX'` and step 1 has no answer — three arrows join those two states, so the machine
+raises rather than guessing.
 
 Asking without a name while several exist is a question with no answer, and is reported as one:
 
