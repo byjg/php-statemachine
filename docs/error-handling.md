@@ -62,14 +62,16 @@ try {
 case — data matching *several* transitions — is not an error by default: `autoTransitionFrom()`
 takes the first transition declared that matches.
 
-Enable `throwErrorIfAmbiguousTransition()` when your conditions are meant to be mutually
-exclusive and you would rather hear about an overlap than depend on declaration order:
+Install `Selector\RejectAmbiguous` when your conditions are meant to be mutually exclusive and
+you would rather hear about an overlap than depend on declaration order:
 
 ```php
+use ByJG\StateMachine\Selector\RejectAmbiguous;
+
 $stateMachine = FiniteStateMachine::createMachine(Stock::class)
     ->addTransition($transitionRequested)
     ->addTransition($transitionUnavailable)
-    ->throwErrorIfAmbiguousTransition();
+    ->selectWith(new RejectAmbiguous());   // or the shorthand: throwErrorIfAmbiguousTransition()
 
 try {
     $stateMachine->autoTransitionFrom(Stock::LastUnits, ["invoice_number" => 10, "status" => "DNB"]);
@@ -79,8 +81,10 @@ try {
 }
 ```
 
-The two options are independent and can be combined. See
-[Auto Transition](auto-transition.md) for the evaluation order this protects you from.
+The two options are independent and can be combined: `throwErrorIfCannotTransition()` governs
+*no* match, the selector governs *several*. Rejecting the overlap is not the only way to settle
+it — `Selector\HighestPriority` ranks the moves instead of forbidding the tie. See
+[Choosing the Winner](auto-transition.md#choosing-the-winner).
 
 ## Exception Class
 

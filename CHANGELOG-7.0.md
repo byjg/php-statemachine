@@ -61,6 +61,22 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   `canTransition()` and `transition()` to pick a route. `State::getTransitionName()` reports which
   route was taken, so it can be persisted next to the state. Two *unnamed* moves between the same
   pair remain a declaration error.
+- **Transition selectors.** Which move wins when the data satisfies more than one of them is now
+  a policy object implementing `TransitionSelectorInterface`, installed with
+  `FiniteStateMachine::selectWith()`. Three ship with the component:
+  `Selector\FirstDeclared` (the default, and the behaviour the machine has always had),
+  `Selector\RejectAmbiguous` (what `throwErrorIfAmbiguousTransition()` now installs) and
+  `Selector\HighestPriority`. They compose —
+  `new HighestPriority(new RejectAmbiguous())` reads as "the highest priority wins, and an
+  unranked tie is an error". The selector receives the matching transitions as a lazily
+  evaluated generator, so `FirstDeclared` still costs exactly one condition call, and it may
+  only return a transition it was offered: a selector chooses between legal moves and cannot
+  produce a state reached through a condition that denied the data.
+- `Transition::withPriority(int)` / `getPriority()` — ranks a move against the others leaving the
+  same state, read only by `Selector\HighestPriority`. Returns a copy; the default is 0, so a
+  machine that declares no priority behaves exactly as before. Also a 6th slot in the
+  `createMachine()` array form and a `priority` key in a definition, which is where it earns its
+  keep: it stops the tie-break from being the order of entries in a YAML file.
 - A 4th optional argument for the transition action on `Transition::__construct()`,
   `Transition::create()` and `Transition::createMultiple()`.
 - A 4th slot in the `createMachine()` array form: `[$from, $to, $condition, $action]`.

@@ -220,16 +220,20 @@ $stateMachine->autoTransitionFrom(Stock::Start, ["qty" => 0, "min_stock" => 20])
 
 When auto transitioned, the state object returned has the `->getData()` method with the data used to validate it.
 
-The transitions are evaluated **in the order they were added to the machine**, and the **first**
-one whose condition returns `true` wins. If two conditions can be satisfied by the same data, the
-result depends on that declaration order. Add `throwErrorIfAmbiguousTransition()` to be told when
-that happens instead of relying on it:
+The transitions are evaluated **in the order they were added to the machine**, and by default the
+**first** one whose condition returns `true` wins. If two conditions can be satisfied by the same
+data, the result depends on that declaration order — which is a policy, and can be replaced with
+`selectWith()`:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine(Stock::class)
-    ->addTransition($transitionInStock)
-    ->addTransition($transitionLastUnits)
-    ->throwErrorIfAmbiguousTransition();
+use ByJG\StateMachine\Selector\HighestPriority;
+use ByJG\StateMachine\Selector\RejectAmbiguous;
+
+// Tell me when two conditions overlap, instead of silently taking the first
+$stateMachine->selectWith(new RejectAmbiguous());
+
+// Or say out loud which move wins, instead of inheriting the order lines were written in
+$stateMachine->selectWith(new HighestPriority());
 ```
 
 See [Auto Transition](docs/auto-transition.md) and [Error Handling](docs/error-handling.md) for details.

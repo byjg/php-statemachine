@@ -85,8 +85,11 @@ When auto transitioned, the state object returned has the `->getData()` method w
 ## Evaluation Order
 
 The transitions leaving the current state are evaluated **in the order they were added to
-the machine**, and the **first** one whose condition returns `true` wins. Evaluation stops
-there — the remaining conditions are not called.
+the machine**, and by default the **first** one whose condition returns `true` wins.
+Evaluation stops there — the remaining conditions are not called.
+
+Which of the matching transitions wins is a policy, and it can be replaced: see
+[Choosing the Winner](#choosing-the-winner).
 
 This matters when two conditions can be satisfied by the same data. In the example above
 the three conditions are mutually exclusive by construction (`qty == 0`, `0 < qty < min_stock`,
@@ -110,29 +113,148 @@ $unavailable = new class implements TransitionConditionInterface {
 Given `["invoice_number" => 10, "status" => "DNB"]` both conditions are `true`, and the
 result is whichever transition was added first.
 
-### Detecting Ambiguity
+## Choosing the Winner
 
-If your conditions are meant to be mutually exclusive, use `throwErrorIfAmbiguousTransition()`
-to be told when they are not, instead of silently getting the first declaration:
+`autoTransitionFrom()` answers two questions: which transitions leaving the current state
+accept this data, and — when several do — which one is taken. The first question belongs to
+the conditions. The second is a policy, and it is an object implementing
+`TransitionSelectorInterface`:
 
 ```php
+interface TransitionSelectorInterface
+{
+    /** @param iterable<Transition> $matching  lazily evaluated, in declaration order */
+    public function select(State $from, iterable $matching, ?array $data): ?Transition;
+}
+```
+
+Install one with `selectWith()`. Three come with the component:
+
+| selector | policy |
+|---|---|
+| `Selector\FirstDeclared` | the first transition that accepts the data wins — **the default** |
+| `Selector\RejectAmbiguous` | exactly one may accept the data; more than one throws |
+| `Selector\HighestPriority` | the highest `priority` among those that accepted wins |
+
+### Rejecting ambiguity
+
+If your conditions are meant to be mutually exclusive, `Selector\RejectAmbiguous` tells you
+when they are not, instead of silently handing back the first declaration:
+
+```php
+use ByJG\StateMachine\Selector\RejectAmbiguous;
+
 $stateMachine = FiniteStateMachine::createMachine(Stock::class)
     ->addTransition($transitionRequested)
     ->addTransition($transitionUnavailable)
-    ->throwErrorIfAmbiguousTransition();
+    ->selectWith(new RejectAmbiguous());
 
 // Throws TransitionException:
 // "Ambiguous transition from LAST_UNITS: the data provided matches REQUESTED_RESUPPLY, UNAVAILABLE"
 $stateMachine->autoTransitionFrom(Stock::LastUnits, ["invoice_number" => 10, "status" => "DNB"]);
 ```
 
+`throwErrorIfAmbiguousTransition()` is a shorthand for exactly this, and stays available:
+
+```php
+$stateMachine->throwErrorIfAmbiguousTransition();   // same as selectWith(new RejectAmbiguous())
+```
+
 Data matching exactly one transition still transitions normally, and data matching none
 still returns `null` (or throws, if `throwErrorIfCannotTransition()` is also enabled).
 
+### Ranking the moves
+
+`Selector\HighestPriority` replaces the tie-break instead of forbidding the tie. It exists so
+that the winner stops being "whichever line was typed first" — which matters most when the
+machine is built by `fromDefinition()`, because then the tie-break is the order of entries in
+a YAML file and reordering that file changes behaviour silently.
+
+```php
+use ByJG\StateMachine\Selector\HighestPriority;
+
+$stateMachine = FiniteStateMachine::createMachine(Stock::class)
+    ->addTransition(Transition::create(Stock::LastUnits, Stock::Unavailable, $unavailable))
+    ->addTransition(Transition::create(Stock::LastUnits, Stock::RequestedResupply, $requested)->withPriority(10))
+    ->selectWith(new HighestPriority());
+
+// REQUESTED_RESUPPLY, although it was declared second
+$stateMachine->autoTransitionFrom(Stock::LastUnits, ["invoice_number" => 10, "status" => "DNB"]);
+```
+
+`withPriority()` returns a **copy** of the transition, so the original is untouched. Priority
+defaults to `0`: a machine where nothing declares one has no ties to rank and behaves exactly
+as it did before. In a definition file it is one more optional key:
+
+```yaml
+transitions:
+  - from: LAST_UNITS
+    to: REQUESTED_RESUPPLY
+    condition: 'App\Fsm\Requested'
+    priority: 10
+```
+
+Only the moves that **accepted** the data are ranked. A high-priority transition whose
+condition said no is not a candidate at all, so it cannot outrank anything.
+
+### Composing them
+
+The tie-breaker of `HighestPriority` is itself a selector, which is how the two policies
+combine:
+
+```php
+$stateMachine->selectWith(new HighestPriority(new RejectAmbiguous()));
+```
+
+reads as "the highest priority wins, and two moves tied at the top is a mistake". Left alone,
+`new HighestPriority()` settles a tie by declaration order.
+
+### Writing your own
+
+A selector receives the state being left, the data, and the transitions that accepted it. The
+last one is a **generator**, evaluated one element at a time: a selector that stops at the
+first element never causes the remaining conditions to run, which is why the default costs
+exactly one condition call. Drain it and you have paid for all of them.
+
+```php
+use ByJG\StateMachine\TransitionSelectorInterface;
+
+// The move going to whichever state the data asks for, ignoring declaration order entirely
+class PreferredTarget implements TransitionSelectorInterface
+{
+    public function select(State $from, iterable $matching, ?array $data): ?Transition
+    {
+        $fallback = null;
+
+        foreach ($matching as $transition) {
+            if ((string)$transition->getDesiredState() === strtoupper($data["prefer"] ?? "")) {
+                return $transition;
+            }
+            $fallback ??= $transition;
+        }
+
+        return $fallback;
+    }
+}
+```
+
+Returning `null` means "no move": `autoTransitionFrom()` returns `null`, or throws under
+`throwErrorIfCannotTransition()`. A selector that refuses to choose *because* the data is
+ambiguous should throw a `TransitionException` saying so, the way `RejectAmbiguous` does,
+rather than return `null`.
+
+:::info
+A selector chooses between legal moves; it cannot invent one. It only ever sees transitions
+whose condition already returned `true`, and the machine throws if it hands back anything it
+was not offered. A buggy selector can pick the wrong move — it cannot produce a state reached
+through a condition that said no.
+:::
+
 :::warning
-This option evaluates **every** condition of the current state instead of stopping at the
-first match. That is safe only because `canTransition()` is expected to be a pure test —
-keep side effects out of your conditions and put them in `TransitionActionInterface` instead.
+Any selector that looks past the first match evaluates **more** of the conditions of the
+current state. That is affordable only because `canTransition()` is expected to be a pure
+test — keep side effects out of your conditions and put them in `TransitionActionInterface`
+instead.
 :::
 
 ## Processing Transitions with Actions

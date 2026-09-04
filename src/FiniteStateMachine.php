@@ -2,6 +2,9 @@
 
 namespace ByJG\StateMachine;
 
+use ByJG\StateMachine\Selector\FirstDeclared;
+use ByJG\StateMachine\Selector\RejectAmbiguous;
+
 /**
  * A finite state machine over the states named by one enum.
  *
@@ -34,7 +37,8 @@ class FiniteStateMachine
 
     protected bool $throwError = false;
 
-    protected bool $throwErrorOnAmbiguity = false;
+    /** @var TransitionSelectorInterface Decides which move wins when several accept the data */
+    protected TransitionSelectorInterface $selector;
 
     /**
      * @param string $enum The enum whose cases are the states of this machine
@@ -60,6 +64,7 @@ class FiniteStateMachine
 
         /** @var class-string<\UnitEnum> $enum */
         $this->enumClass = $enum;
+        $this->selector = new FirstDeclared();
 
         foreach ($enum::cases() as $case) {
             $name = State::nameOf($case);
@@ -77,10 +82,10 @@ class FiniteStateMachine
 
     /**
      * @param string $enum The enum whose cases are the states of this machine
-     * @param array $transitionList Each entry is [from, to, condition?, action?]. Both ends are
-     *                              named by an enum case or the string it corresponds to; the
-     *                              condition and the action may be instances or the name of a
-     *                              class implementing the matching interface.
+     * @param array $transitionList Each entry is [from, to, condition?, action?, name?, priority?].
+     *                              Both ends are named by an enum case or the string it
+     *                              corresponds to; the condition and the action may be instances
+     *                              or the name of a class implementing the matching interface.
      * @param callable|null $resolver Builds a collaborator from its class name. Defaults to
      *                                `new $className()`. Pass `[$container, 'get']` to let a
      *                                PSR-11 container build it instead.
@@ -97,14 +102,16 @@ class FiniteStateMachine
         $stateMachine->resolver = $resolver;
 
         foreach ($transitionList as $transition) {
+            $built = new Transition(
+                $transition[0],
+                $transition[1],
+                $stateMachine->resolve($transition[2] ?? null, TransitionConditionInterface::class),
+                $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class),
+                $transition[4] ?? null
+            );
+
             $stateMachine->addTransition(
-                new Transition(
-                    $transition[0],
-                    $transition[1],
-                    $stateMachine->resolve($transition[2] ?? null, TransitionConditionInterface::class),
-                    $stateMachine->resolve($transition[3] ?? null, TransitionActionInterface::class),
-                    $transition[4] ?? null
-                )
+                isset($transition[5]) ? $built->withPriority((int)$transition[5]) : $built
             );
         }
 
@@ -193,6 +200,11 @@ class FiniteStateMachine
      * its cases, so a stale or misspelled state name is rejected when the file is read rather
      * than silently becoming a state nothing can reach.
      *
+     * `priority` is optional and only means something to a selector that orders by it — see
+     * selectWith() and Selector\HighestPriority. It is worth declaring in a file precisely
+     * because a file has an order of its own, and leaving the tie-break to that order makes
+     * reordering the entries a change in behaviour that nothing in the file admits to.
+     *
      * `from` also accepts a list, which declares the same move out of several states. It is
      * the declarative form of Transition::createMultiple():
      *
@@ -229,6 +241,7 @@ class FiniteStateMachine
                     $entry["condition"] ?? null,
                     $entry["action"] ?? null,
                     $entry["name"] ?? null,
+                    $entry["priority"] ?? null,
                 ];
             }
         }
@@ -292,10 +305,32 @@ class FiniteStateMachine
      *
      * This evaluates every condition of the current state rather than stopping at the
      * first match, which is safe only because conditions must be free of side effects.
+     *
+     * A shorthand for `selectWith(new RejectAmbiguous())`, which is the same policy stated
+     * as an object and can be composed with the others.
      */
     public function throwErrorIfAmbiguousTransition(): static
     {
-        $this->throwErrorOnAmbiguity = true;
+        return $this->selectWith(new RejectAmbiguous());
+    }
+
+    /**
+     * Replaces the policy deciding which move wins when several accept the data.
+     *
+     * The machine ships with Selector\FirstDeclared (the default), Selector\RejectAmbiguous
+     * and Selector\HighestPriority, and they compose:
+     *
+     *     $machine->selectWith(new HighestPriority(new RejectAmbiguous()));
+     *
+     * reads as "the highest priority wins, and an unranked tie is an error".
+     *
+     * A selector only ever sees transitions whose condition already returned true, and the
+     * machine rejects a transition it did not offer, so a selector chooses between legal
+     * moves and cannot invent one.
+     */
+    public function selectWith(TransitionSelectorInterface $selector): static
+    {
+        $this->selector = $selector;
         return $this;
     }
 
@@ -398,63 +433,63 @@ class FiniteStateMachine
     /**
      * Decides the next state from the current one, based on the data provided.
      *
-     * The transitions leaving the current state are evaluated in the order they were
-     * added to the machine and the FIRST one whose condition returns true wins. If more
-     * than one condition can be true for the same data, the outcome therefore depends on
-     * the declaration order; call throwErrorIfAmbiguousTransition() to be told about it
-     * instead of relying on that order.
+     * The transitions leaving the current state are evaluated in the order they were added to
+     * the machine, and which of the matching ones wins is the selector's decision. By default
+     * it is the FIRST one whose condition returns true, and evaluation stops there.
+     *
+     * If more than one condition can be true for the same data, the outcome therefore depends
+     * on the declaration order. selectWith() replaces that policy: Selector\RejectAmbiguous to
+     * be told about the overlap instead of relying on the order, Selector\HighestPriority to
+     * state the order explicitly instead of inheriting it from the source file.
      *
      * @param State $currentState
      * @param array $data
      * @return State|null The next state, or null when nothing matches
      * @throws TransitionException If the data matches no transition and
-     *                             throwErrorIfCannotTransition() is enabled, or if it
-     *                             matches several and throwErrorIfAmbiguousTransition() is
+     *                             throwErrorIfCannotTransition() is enabled, or if the
+     *                             selector rejects what it was offered
      */
     public function autoTransitionFrom(string|\UnitEnum|State $currentState, array $data): ?State
     {
         $currentState = $this->state($currentState);
-        $matched = [];
 
-        /**
-         * @var Transition $transition
-         */
-        foreach ($this->possibleTransitions($currentState) as $transition) {
-            if (!$transition->runTransitionFunction($data)) {
-                continue;
+        // What the selector was actually shown. It can only choose from these, and a generator
+        // hands them over one at a time: a selector that stops at the first match never causes
+        // the remaining conditions to run.
+        $offered = [];
+        $matching = (function () use ($currentState, $data, &$offered): \Generator {
+            foreach ($this->possibleTransitions($currentState) as $transition) {
+                if ($transition->runTransitionFunction($data)) {
+                    $offered[] = $transition;
+                    yield $transition;
+                }
+            }
+        })();
+
+        $chosen = $this->selector->select($currentState, $matching, $data);
+
+        if (is_null($chosen)) {
+            if ($this->throwError) {
+                throw new TransitionException(
+                    "There is not possible transitions from {$currentState} with the data provided"
+                );
             }
 
-            $matched[] = $transition;
-
-            // First match wins, unless we were asked to detect ambiguity
-            if (!$this->throwErrorOnAmbiguity) {
-                break;
-            }
+            return null;
         }
 
-        if (count($matched) > 1) {
-            $candidates = implode(", ", array_map(
-                fn (Transition $item): string => $item->getName() === ""
-                    ? $item->getDesiredState()->getState()
-                    : "{$item->getDesiredState()} ({$item->getName()})",
-                $matched
-            ));
+        // The selector owns the policy, not the correctness. Handing back a transition it was
+        // not offered would move the machine along a condition that said no, or out of a state
+        // it is not in, so it is refused here rather than acted upon.
+        if (!in_array($chosen, $offered, true)) {
             throw new TransitionException(
-                "Ambiguous transition from {$currentState}: the data provided matches {$candidates}"
+                get_class($this->selector) . " chose {$chosen->describe()}, which is not one of the "
+                . "transitions it was offered from {$currentState}. A selector must return a "
+                . "transition it received, or null."
             );
         }
 
-        if (count($matched) === 1) {
-            return $this->arrive($matched[0], $data);
-        }
-
-        if ($this->throwError) {
-            throw new TransitionException(
-                "There is not possible transitions from {$currentState} with the data provided"
-            );
-        }
-
-        return null;
+        return $this->arrive($chosen, $data);
     }
 
     /**

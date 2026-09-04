@@ -136,7 +136,7 @@ $stateMachine->autoTransitionFrom(ArticleState::Draft, $data);
 
 ### The complete format
 
-Five keys, two of them required:
+Six keys, two of them required:
 
 ```yaml
 enum: 'App\Fsm\OrderState'          # REQUIRED — its cases are the states of the machine
@@ -147,6 +147,7 @@ transitions:                         # REQUIRED — a list, evaluated in the ord
     name: PIX                        # optional — tells apart several moves joining one pair
     condition: 'App\Fsm\PaidByPix'   # optional — a TransitionConditionInterface class
     action: 'App\Fsm\ConfirmPix'     # optional — a TransitionActionInterface class
+    priority: 10                     # optional — ranks this move for HighestPriority
 ```
 
 | key | required | value |
@@ -158,6 +159,7 @@ transitions:                         # REQUIRED — a list, evaluated in the ord
 | `transitions[].name` | no | required *only* when the same pair of states is joined more than once |
 | `transitions[].condition` | no | class implementing `TransitionConditionInterface`; the move is always allowed without one |
 | `transitions[].action` | no | class implementing `TransitionActionInterface`; run by `process()`, never by the machine |
+| `transitions[].priority` | no | integer, default `0`; only read by [`Selector\HighestPriority`](auto-transition.md#choosing-the-winner) |
 
 Quote the class names. `condition: App\Fsm\PaidByPix` unquoted happens to work, because YAML
 treats a backslash literally in a plain scalar, but single quotes say so on purpose.
@@ -165,6 +167,27 @@ treats a backslash literally in a plain scalar, but single quotes say so on purp
 Everything in the file is checked when it is read: `enum` must be an enum, every `from` and `to`
 must be one of its cases, and every `condition` and `action` must exist and implement the right
 interface.
+
+### Why `priority` is worth declaring in a file
+
+`transitions` is a list, and by default the first entry whose condition accepts the data wins.
+In PHP that order is the order you wrote the calls; in a file it is the order of the entries,
+which means reordering the file — or merging two of them, or letting a generator emit them —
+changes behaviour, and nothing in the file admits that it would.
+
+`priority` states the order instead of inheriting it. It costs nothing until you install a
+selector that reads it:
+
+```php
+use ByJG\StateMachine\Selector\HighestPriority;
+use ByJG\StateMachine\Selector\RejectAmbiguous;
+
+$machine = FiniteStateMachine::fromDefinition($definition)
+    ->selectWith(new HighestPriority(new RejectAmbiguous()));
+```
+
+which reads as "the highest priority wins, and two entries tied at the top is a mistake in the
+file". See [Choosing the Winner](auto-transition.md#choosing-the-winner).
 
 ### Naming the routes into a state
 

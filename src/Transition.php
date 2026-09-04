@@ -31,6 +31,12 @@ class Transition
     protected string $name;
 
     /**
+     * @var int Ranks this move against the others leaving the same state, for the selectors
+     *          that order by it. Zero — the default — means "unranked".
+     */
+    protected int $priority = 0;
+
+    /**
      * Both ends are named by an enum case, the string it corresponds to, or a State.
      *
      * The names are normalised here but not validated: a Transition on its own has no enum to
@@ -131,6 +137,40 @@ class Transition
             $result[] = new Transition($from, $desiredState, $transitionCondition, $transitionAction, $name);
         }
         return $result;
+    }
+
+    /**
+     * A copy of this transition, ranked.
+     *
+     * Priority is not part of what a transition *is* — it only means something to the selector
+     * comparing this move against the others leaving the same state — so it is decorated on
+     * rather than occupying a seventh constructor argument:
+     *
+     *     Transition::create(Stock::Start, Stock::InStock, $inStock)->withPriority(10)
+     *
+     * Higher wins. The default is 0, so a machine where nothing declares a priority has no
+     * ties to break and behaves exactly as it did before.
+     *
+     * @param int $priority
+     * @return static
+     */
+    public function withPriority(int $priority): static
+    {
+        $transition = clone $this;
+        $transition->priority = $priority;
+
+        return $transition;
+    }
+
+    /**
+     * How this move ranks against the others leaving the same state. Zero unless declared.
+     *
+     * Only the selectors that order by priority — Selector\HighestPriority — read this. The
+     * default selector never does.
+     */
+    public function getPriority(): int
+    {
+        return $this->priority;
     }
 
     /**
