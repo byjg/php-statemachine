@@ -7,7 +7,7 @@
     cacheDirectory="/tmp/psalm"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns="https://getpsalm.org/schema/config"
-    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    xsi:schemaLocation="https://getpsalm.org/schema/config tools/psalm/vendor/vimeo/psalm/config.xsd"
 >
     <projectFiles>
         <directory name="src" />
@@ -15,4 +15,12 @@
             <directory name="vendor" />
         </ignoreFiles>
     </projectFiles>
+
+    <issueHandlers>
+        <!--
+            The fluent methods return `static` rather than `self` precisely so the classes
+            can be extended. Making them final is a deliberate non-goal.
+        -->
+        <ClassMustBeFinal errorLevel="suppress" />
+    </issueHandlers>
 </psalm>

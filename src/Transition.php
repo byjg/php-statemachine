@@ -20,49 +20,167 @@ class Transition
     protected ?TransitionConditionInterface $transitionCondition;
 
     /**
-     * @param State $currentState
-     * @param State $desiredState
-     * @param TransitionConditionInterface|null $transitionCondition
+     * @var TransitionActionInterface|null
      */
-    public function __construct(State $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null)
-    {
-        $this->currentState = $currentState;
-        $this->desiredState = $desiredState;
+    protected ?TransitionActionInterface $transitionAction;
+
+    /**
+     * @var string The name distinguishing this transition from others between the same two
+     *             states. Empty when the move needs no distinguishing, which is the common case.
+     */
+    protected string $name;
+
+    /**
+     * @var int Ranks this move against the others leaving the same state, for the selectors
+     *          that order by it. Zero — the default — means "unranked".
+     */
+    protected int $priority = 0;
+
+    /**
+     * Both ends are named by an enum case, the string it corresponds to, or a State.
+     *
+     * The names are normalised here but not validated: a Transition on its own has no enum to
+     * check them against. FiniteStateMachine::addTransition() rejects any end that is not one
+     * of its states, which is where a typo in a declaration is caught.
+     *
+     * A name is only needed when the same two states are joined more than once — DRAFT to PAID
+     * by PIX, by card and by transfer are three moves, each with its own condition and its own
+     * side effect. Leave it out when the pair of states says everything.
+     *
+     * @param string|\UnitEnum|State $currentState
+     * @param string|\UnitEnum|State $desiredState
+     * @param TransitionConditionInterface|null $transitionCondition
+     * @param TransitionActionInterface|null $transitionAction
+     * @param string|\UnitEnum|null $name Distinguishes this move from others between the same
+     *                                    two states. Compared uppercased, like a state name.
+     */
+    public function __construct(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?TransitionConditionInterface $transitionCondition = null,
+        ?TransitionActionInterface $transitionAction = null,
+        string|\UnitEnum|null $name = null
+    ) {
+        $this->currentState = new State(State::nameOf($currentState));
+        $this->desiredState = new State(State::nameOf($desiredState));
         $this->transitionCondition = $transitionCondition;
+        $this->transitionAction = $transitionAction;
+        $this->name = is_null($name) ? "" : State::nameOf($name);
     }
 
     /**
-     * @param State $currentState
-     * @param State $desiredState
+     * Names the move, for when the same two states are joined more than once.
+     *
+     * Reads in the order the move is spoken about — "paid by PIX" — and keeps the name in front
+     * of the condition and the action rather than trailing behind them:
+     *
+     *     Transition::named('PIX', OrderState::Draft, OrderState::Paid, $paidByPix, $confirmPix)
+     *
+     * @param string|\UnitEnum $name
+     * @param string|\UnitEnum|State $currentState
+     * @param string|\UnitEnum|State $desiredState
      * @param TransitionConditionInterface|null $transitionCondition
+     * @param TransitionActionInterface|null $transitionAction
      * @return Transition
      */
-    public static function create(State $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null): Transition
-    {
-        return new Transition($currentState, $desiredState, $transitionCondition);
+    public static function named(
+        string|\UnitEnum $name,
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?TransitionConditionInterface $transitionCondition = null,
+        ?TransitionActionInterface $transitionAction = null
+    ): Transition {
+        return new Transition($currentState, $desiredState, $transitionCondition, $transitionAction, $name);
     }
 
     /**
-     * @param State[] $currentState
-     * @param State $desiredState
+     * @param string|\UnitEnum|State $currentState
+     * @param string|\UnitEnum|State $desiredState
      * @param TransitionConditionInterface|null $transitionCondition
+     * @param TransitionActionInterface|null $transitionAction
+     * @param string|\UnitEnum|null $name
+     * @return Transition
+     */
+    public static function create(
+        string|\UnitEnum|State $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?TransitionConditionInterface $transitionCondition = null,
+        ?TransitionActionInterface $transitionAction = null,
+        string|\UnitEnum|null $name = null
+    ): Transition {
+        return new Transition($currentState, $desiredState, $transitionCondition, $transitionAction, $name);
+    }
+
+    /**
+     * Creates one transition per origin state, all sharing the same condition and action.
+     *
+     * This is how a side effect that must happen on every way into a state is declared
+     * once instead of being repeated per transition.
+     *
+     * @param array<string|\UnitEnum|State> $currentState
+     * @param string|\UnitEnum|State $desiredState
+     * @param TransitionConditionInterface|null $transitionCondition
+     * @param TransitionActionInterface|null $transitionAction
+     * @param string|\UnitEnum|null $name Shared by every transition produced, which is legal
+     *                                    because they start from different states
      * @return Transition[]
      */
-    public static function createMultiple(array $currentState, State $desiredState, ?TransitionConditionInterface $transitionCondition = null): array
-    {
+    public static function createMultiple(
+        array $currentState,
+        string|\UnitEnum|State $desiredState,
+        ?TransitionConditionInterface $transitionCondition = null,
+        ?TransitionActionInterface $transitionAction = null,
+        string|\UnitEnum|null $name = null
+    ): array {
         $result = [];
         foreach ($currentState as $from) {
-            $result[] = new Transition($from, $desiredState, $transitionCondition);
+            $result[] = new Transition($from, $desiredState, $transitionCondition, $transitionAction, $name);
         }
         return $result;
     }
 
     /**
+     * A copy of this transition, ranked.
+     *
+     * Priority is not part of what a transition *is* — it only means something to the selector
+     * comparing this move against the others leaving the same state — so it is decorated on
+     * rather than occupying a seventh constructor argument:
+     *
+     *     Transition::create(Stock::Start, Stock::InStock, $inStock)->withPriority(10)
+     *
+     * Higher wins. The default is 0, so a machine where nothing declares a priority has no
+     * ties to break and behaves exactly as it did before.
+     *
+     * @param int $priority
+     * @return static
+     */
+    public function withPriority(int $priority): static
+    {
+        $transition = clone $this;
+        $transition->priority = $priority;
+
+        return $transition;
+    }
+
+    /**
+     * How this move ranks against the others leaving the same state. Zero unless declared.
+     *
+     * Only the selectors that order by priority — Selector\HighestPriority — read this. The
+     * default selector never does.
+     */
+    public function getPriority(): int
+    {
+        return $this->priority;
+    }
+
+    /**
+     * Returns a copy of the origin state, so the caller cannot mutate the transition.
+     *
      * @return State
      */
     public function getCurrentState(): State
     {
-        return $this->currentState;
+        return clone $this->currentState;
     }
 
     /**
@@ -75,6 +193,35 @@ class Transition
         $desiredState->setData($data);
 
         return $desiredState;
+    }
+
+    /**
+     * The name distinguishing this move from others between the same two states.
+     *
+     * Empty when the move was not named, which is the common case: most pairs of states are
+     * joined once and the pair already says which move it is.
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
+     * How this transition reads when it has to be told apart from another.
+     */
+    public function describe(): string
+    {
+        return $this->name === ""
+            ? "{$this->currentState} -> {$this->desiredState}"
+            : "{$this->currentState} -> {$this->desiredState} ({$this->name})";
+    }
+
+    /**
+     * @return TransitionActionInterface|null
+     */
+    public function getTransitionAction(): ?TransitionActionInterface
+    {
+        return $this->transitionAction;
     }
 
     /**

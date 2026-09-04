@@ -2,7 +2,7 @@
   "name": "byjg/statemachine",
   "description": "Finite State Machine implementation with conditional transitions and state actions",
   "require": {
-    "php": ">=8.3 <8.6"
+    "php": ">=8.3 <8.7"
   },
   "autoload": {
     "psr-4": {
@@ -15,12 +15,18 @@
       }
   },
   "require-dev": {
-    "phpunit/phpunit": "^10.5|^11.5",
-    "vimeo/psalm": "^5.9|^6.13"
+    "phpunit/phpunit": "^12.5",
+    "byjg/serializer": "^7.0"
+  },
+  "suggest": {
+    "byjg/serializer": "To load the machine definition from a YAML or JSON file"
   },
   "scripts": {
     "test": "vendor/bin/phpunit",
-    "psalm": "vendor/bin/psalm --threads=1"
+    "psalm": [
+      "@composer --working-dir=tools/psalm update --no-interaction",
+      "tools/psalm/vendor/bin/psalm --threads=1"
+    ]
   },
   "license": "MIT",
   "prefer-stable": true,
