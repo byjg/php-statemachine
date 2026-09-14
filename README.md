@@ -12,7 +12,7 @@ of transitions (from one state to another state). In addition, each state can ha
 [![Build Status](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml)
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-statemachine/)
-[![GitHub license](https://img.shields.io/github/license/byjg/php-statemachine.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub license](https://img.shields.io/github/license/byjg/php-statemachine.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-statemachine.svg)](https://github.com/byjg/php-statemachine/releases/)
 
 Differently from other State machines, this implementation doesn't have an initial or final state.
@@ -331,13 +331,6 @@ $state = $stateMachine->state('OUT_OF_STOCK');   // the same state
 
 ```bash
 composer require "byjg/statemachine"
-```
-
-## Dependencies
-
-```mermaid
-flowchart TD
-    byjg/statemachine
 ```
 
 ----
