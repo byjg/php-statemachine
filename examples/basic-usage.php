@@ -5,7 +5,7 @@ use ByJG\StateMachine\FiniteStateMachine;
 use ByJG\StateMachine\State;
 use ByJG\StateMachine\TransitionConditionInterface;
 
-require __DIR__ . "/vendor/autoload.php";
+require __DIR__ . "/../vendor/autoload.php";
 
 /**
  * The states of the machine. The enum is what makes them predictable: nothing outside these
@@ -21,7 +21,7 @@ enum Letters: string
 }
 
 /**
- * The graph lives in example.yaml and the rules live here, in a class the definition names.
+ * The graph lives in basic-usage.yaml and the rules live here, in a class the definition names.
  *
  * Conditions must be free of side effects: the machine may evaluate several of them to decide
  * where to go, and evaluating one must not change anything.
@@ -40,7 +40,7 @@ class RequiresData implements TransitionConditionInterface
 // that need constructor arguments. This one does not, so the machine builds it itself.
 // The enum comes from the file, so nothing here has to repeat it.
 $stateMachine = FiniteStateMachine::fromDefinition(
-    Serialize::fromYaml((string)file_get_contents(__DIR__ . "/example.yaml"))->toArray()
+    Serialize::fromYaml((string)file_get_contents(__DIR__ . "/basic-usage.yaml"))->toArray()
 );
 
 $stA = Letters::A;

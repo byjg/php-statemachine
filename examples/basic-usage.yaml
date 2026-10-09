@@ -1,4 +1,4 @@
-# The graph of example.php.
+# The graph of basic-usage.php.
 #
 #   A --> B --> D (only when there is data)
 #   A --> C

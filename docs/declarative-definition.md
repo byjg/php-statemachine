@@ -134,6 +134,35 @@ $stateMachine->autoTransitionFrom(ArticleState::Draft, $data);
 
 `Serialize::fromJson()` works the same way, as does any other parser that produces an array.
 
+For the same reason a definition can live anywhere inside a larger configuration, and one file
+can hold several machines — nest each one under a key and hand each key to `fromDefinition()`:
+
+```yaml
+# product.yaml
+stock:
+  enum: 'App\Fsm\Product'
+  transitions:
+    - from: __VOID__
+      to: IN_STOCK
+      condition: 'App\Fsm\InStock'
+
+resupply:
+  enum: 'App\Fsm\Product'
+  transitions:
+    - from: [LAST_UNITS, OUT_OF_STOCK]
+      to: RESUPPLIED
+      condition: 'App\Fsm\Fulfilled'
+```
+
+```php
+$definition = Serialize::fromYaml(file_get_contents('product.yaml'))->toArray();
+
+$stockMachine = FiniteStateMachine::fromDefinition($definition['stock']);
+$resupplyMachine = FiniteStateMachine::fromDefinition($definition['resupply']);
+```
+
+Each machine is independent: they may share an enum, as here, or each name its own.
+
 ### The complete format
 
 Six keys, two of them required:

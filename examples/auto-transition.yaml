@@ -1,4 +1,4 @@
-# The two machines of example2.php.
+# The two machines of auto-transition.php.
 #
 # `fromDefinition()` reads a single machine, so a file describing more than one just nests
 # them under a key each — the definition is a plain array and can live anywhere inside a

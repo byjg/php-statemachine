@@ -170,7 +170,7 @@ $stateMachine = FiniteStateMachine::createMachine(
 
 The condition and the action may also be given as the *name* of a class implementing the
 matching interface, which is what allows the whole machine to be described in a YAML file
-instead of in code. See [Declarative Definition](declarative-definition).
+instead of in code. See [Declarative Definition](declarative-definition.md).
 
 ## Performing a Transition
 

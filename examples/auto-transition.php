@@ -7,7 +7,7 @@ use ByJG\StateMachine\TransitionActionInterface;
 use ByJG\StateMachine\TransitionConditionInterface;
 use ByJG\StateMachine\TransitionException;
 
-require __DIR__ . "/vendor/autoload.php";
+require __DIR__ . "/../vendor/autoload.php";
 
 /**
  * Every state either machine can be in. Two machines share this enum: the first decides where a
@@ -37,7 +37,7 @@ enum Warehouse: string
 }
 
 /**
- * The rules named by example2.yaml. Each one is a class, so each one can be unit tested,
+ * The rules named by auto-transition.yaml. Each one is a class, so each one can be unit tested,
  * type checked and debugged — which is why the definition names classes instead of carrying
  * expressions such as "qty >= min_stock" as strings.
  */
@@ -120,7 +120,7 @@ class Announce implements TransitionActionInterface
     }
 }
 
-$definition = Serialize::fromYaml((string)file_get_contents(__DIR__ . "/example2.yaml"))->toArray();
+$definition = Serialize::fromYaml((string)file_get_contents(__DIR__ . "/auto-transition.yaml"))->toArray();
 
 $stockMachine = FiniteStateMachine::fromDefinition($definition["stock"]);
 $resupplyMachine = FiniteStateMachine::fromDefinition($definition["resupply"]);
