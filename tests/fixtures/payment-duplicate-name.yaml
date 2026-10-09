@@ -1,0 +1,10 @@
+enum: 'Tests\Fixture\Payment'
+
+transitions:
+  - name: PIX
+    from: DRAFT
+    to: PAID
+
+  - name: pix
+    from: DRAFT
+    to: PAID

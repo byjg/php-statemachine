@@ -1,0 +1,12 @@
+enum: 'Tests\Fixture\Stock'
+
+transitions:
+  # Declared first, so it would win by declaration order alone
+  - from: __VOID__
+    to: LAST_UNITS
+    condition: 'Tests\Fixture\HasReviewer'
+
+  - from: __VOID__
+    to: IN_STOCK
+    condition: 'Tests\Fixture\HasReviewer'
+    priority: 10
