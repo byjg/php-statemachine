@@ -4,6 +4,7 @@ namespace ByJG\StateMachine;
 
 use ByJG\StateMachine\Selector\FirstDeclared;
 use ByJG\StateMachine\Selector\RejectAmbiguous;
+use UnitEnum;
 
 /**
  * A finite state machine over the states named by one enum.
@@ -23,7 +24,7 @@ class FiniteStateMachine
     /** @var array<string, Transition> Keyed by "CURRENT___DESIRED" */
     protected array $transitionList = [];
 
-    /** @var class-string<\UnitEnum> The enum naming the states of this machine */
+    /** @var class-string<UnitEnum> The enum naming the states of this machine */
     protected string $enumClass;
 
     /** @var array<string, State> One per case of the enum, keyed by the uppercased name */
@@ -62,7 +63,7 @@ class FiniteStateMachine
             );
         }
 
-        /** @var class-string<\UnitEnum> $enum */
+        /** @var class-string<UnitEnum> $enum */
         $this->enumClass = $enum;
         $this->selector = new FirstDeclared();
 
@@ -124,13 +125,13 @@ class FiniteStateMachine
      * A case of another enum is the mistake worth catching here: it satisfies every type
      * declaration a union could express, and only the machine knows which enum is its own.
      *
-     * @param string|\UnitEnum|State $state
+     * @param string|UnitEnum|State $state
      * @return string
      * @throws TransitionException
      */
-    protected function stateName(string|\UnitEnum|State $state): string
+    protected function stateName(string|UnitEnum|State $state): string
     {
-        if ($state instanceof \UnitEnum) {
+        if ($state instanceof UnitEnum) {
             $this->assertOwnCase($state);
         }
 
@@ -168,10 +169,10 @@ class FiniteStateMachine
      * is_a() rather than instanceof, because the class to compare against is only known at
      * runtime and an instanceof against a dynamic name tells static analysis nothing.
      *
-     * @param \UnitEnum $case
+     * @param UnitEnum $case
      * @throws TransitionException
      */
-    protected function assertOwnCase(\UnitEnum $case): void
+    protected function assertOwnCase(UnitEnum $case): void
     {
         if (is_a($case, $this->enumClass)) {
             return;
@@ -390,7 +391,7 @@ class FiniteStateMachine
         return $this;
     }
 
-    public function possibleTransitions(string|\UnitEnum|State $currentState): array
+    public function possibleTransitions(string|UnitEnum|State $currentState): array
     {
         $currentState = $this->stateName($currentState);
 
@@ -405,9 +406,9 @@ class FiniteStateMachine
     }
 
     public function getTransition(
-        string|\UnitEnum|State $currentState,
-        string|\UnitEnum|State $desiredState,
-        string|\UnitEnum|null $name = null
+        string|UnitEnum|State $currentState,
+        string|UnitEnum|State $desiredState,
+        string|UnitEnum|null  $name = null
     ): ?Transition {
         $from = $this->stateName($currentState);
         $to = $this->stateName($desiredState);
@@ -442,14 +443,14 @@ class FiniteStateMachine
      * be told about the overlap instead of relying on the order, Selector\HighestPriority to
      * state the order explicitly instead of inheriting it from the source file.
      *
-     * @param State $currentState
+     * @param string|UnitEnum|State $currentState
      * @param array $data
      * @return State|null The next state, or null when nothing matches
      * @throws TransitionException If the data matches no transition and
      *                             throwErrorIfCannotTransition() is enabled, or if the
      *                             selector rejects what it was offered
      */
-    public function autoTransitionFrom(string|\UnitEnum|State $currentState, array $data): ?State
+    public function autoTransitionFrom(string|UnitEnum|State $currentState, array $data): ?State
     {
         $currentState = $this->state($currentState);
 
@@ -514,18 +515,19 @@ class FiniteStateMachine
      * returned here carries the transition it came through, so process() runs the action
      * of that specific transition.
      *
-     * @param State $currentState
-     * @param State $desiredState
+     * @param string|UnitEnum|State $currentState
+     * @param string|UnitEnum|State $desiredState
      * @param array|null $data
+     * @param string|UnitEnum|null $name Picks the route when the pair is joined more than once
      * @return State|null The state reached, or null when the move is not allowed
      * @throws TransitionException If the move is not allowed and
      *                             throwErrorIfCannotTransition() is enabled
      */
     public function transition(
-        string|\UnitEnum|State $currentState,
-        string|\UnitEnum|State $desiredState,
-        ?array $data = null,
-        string|\UnitEnum|null $name = null
+        string|UnitEnum|State $currentState,
+        string|UnitEnum|State $desiredState,
+        ?array                $data = null,
+        string|UnitEnum|null  $name = null
     ): ?State {
         $transition = $this->getTransition($currentState, $desiredState, $name);
         $allowed = !empty($transition) && $transition->runTransitionFunction($data);
@@ -548,10 +550,10 @@ class FiniteStateMachine
      * @throws TransitionException
      */
     public function canTransition(
-        string|\UnitEnum|State $currentState,
-        string|\UnitEnum|State $desiredState,
-        ?array $data = null,
-        string|\UnitEnum|null $name = null
+        string|UnitEnum|State $currentState,
+        string|UnitEnum|State $desiredState,
+        ?array                $data = null,
+        string|UnitEnum|null  $name = null
     ): bool {
         $result = $this->checkIfCanTransition($currentState, $desiredState, $data, $name);
 
@@ -566,10 +568,10 @@ class FiniteStateMachine
     }
 
     protected function checkIfCanTransition(
-        string|\UnitEnum|State $currentState,
-        string|\UnitEnum|State $desiredState,
-        ?array $data = null,
-        string|\UnitEnum|null $name = null
+        string|UnitEnum|State $currentState,
+        string|UnitEnum|State $desiredState,
+        ?array                $data = null,
+        string|UnitEnum|null  $name = null
     ): bool {
         $transition = $this->getTransition($currentState, $desiredState, $name);
 
@@ -589,10 +591,10 @@ class FiniteStateMachine
      * The copy is intentional: the caller is free to attach data to the returned state
      * without corrupting the machine definition.
      *
-     * @param string|\UnitEnum|State $state
+     * @param string|UnitEnum|State $state
      * @throws TransitionException If the reference does not name a state of this machine
      */
-    public function state(string|\UnitEnum|State $state): State
+    public function state(string|UnitEnum|State $state): State
     {
         return clone $this->stateList[$this->stateName($state)];
     }
@@ -603,7 +605,7 @@ class FiniteStateMachine
      * States are identified by name only. The data a state carries (set by
      * autoTransitionFrom, for instance) is irrelevant to the question.
      */
-    public function isInitialState(string|\UnitEnum|State $state): bool
+    public function isInitialState(string|UnitEnum|State $state): bool
     {
         $name = $this->stateName($state);
 
@@ -622,7 +624,7 @@ class FiniteStateMachine
      * States are identified by name only. The data a state carries (set by
      * autoTransitionFrom, for instance) is irrelevant to the question.
      */
-    public function isFinalState(string|\UnitEnum|State $state): bool
+    public function isFinalState(string|UnitEnum|State $state): bool
     {
         $name = $this->stateName($state);
 
