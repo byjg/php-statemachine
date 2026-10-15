@@ -6,6 +6,7 @@ use ByJG\StateMachine\State;
 use ByJG\StateMachine\Transition;
 use ByJG\StateMachine\TransitionConditionInterface;
 use PHPUnit\Framework\TestCase;
+use Tests\Fixture\Letter;
 
 class TransitionTest extends TestCase
 {
@@ -17,9 +18,11 @@ class TransitionTest extends TestCase
         $transition = Transition::create($state1, $state2);
 
         // Sanity Test
-        $this->assertSame($state1, $transition->getCurrentState());
-        $this->assertEquals($state2, $transition->getDesiredState());  // The state is equal
-        $this->assertNotSame($state2, $transition->getDesiredState()); // However, they aren't the same object
+        // Both accessors hand back a copy, so the caller cannot mutate the transition
+        $this->assertEquals($state1, $transition->getCurrentState());   // The state is equal
+        $this->assertNotSame($state1, $transition->getCurrentState());  // However, they aren't the same object
+        $this->assertEquals($state2, $transition->getDesiredState());   // The state is equal
+        $this->assertNotSame($state2, $transition->getDesiredState());  // However, they aren't the same object
         $this->assertNull($transition->getDesiredState()->getData());
 
         // Get State with Data
@@ -44,6 +47,26 @@ class TransitionTest extends TestCase
         $this->assertFalse($transition->runTransitionFunction(['key_sample'=>'1']));
     }
 
+    /**
+     * The guard is handed back as the very instance the transition was built with, so a caller
+     * can name it or ask it again; an unconditional move has none.
+     */
+    public function testTheConditionCanBeReadBack(): void
+    {
+        $condition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data['key']);
+            }
+        };
+
+        $guarded = Transition::create(Letter::A, Letter::B, $condition);
+        $this->assertSame($condition, $guarded->getTransitionCondition());
+
+        $unconditional = Transition::create(Letter::A, Letter::B);
+        $this->assertNull($unconditional->getTransitionCondition());
+    }
+
     public function testMultipleTransition(): void
     {
         $state1 = new State('1');
@@ -59,5 +82,36 @@ class TransitionTest extends TestCase
 
         $this->assertEquals($state2, $transitionList[1]->getCurrentState());
         $this->assertEquals($state3, $transitionList[1]->getDesiredState());
+    }
+
+    /**
+     * A Transition names its ends the same way the machine does. On its own it has no enum to
+     * check them against — it normalises the reference, and FiniteStateMachine::addTransition()
+     * is what rejects a state the enum does not declare.
+     */
+    public function testEndsCanBeNamedByACaseOrAString(): void
+    {
+        $fromCase = Transition::create(Letter::A, Letter::B);
+        $this->assertEquals('A', $fromCase->getCurrentState()->getState());
+        $this->assertEquals('B', $fromCase->getDesiredState()->getState());
+
+        $fromString = Transition::create('a', 'b');
+        $this->assertEquals('A', $fromString->getCurrentState()->getState());
+        $this->assertEquals('B', $fromString->getDesiredState()->getState());
+
+        $fromState = Transition::create(new State('A'), new State('B'));
+        $this->assertEquals('A', $fromState->getCurrentState()->getState());
+        $this->assertEquals('B', $fromState->getDesiredState()->getState());
+    }
+
+    public function testMultipleTransitionAcceptsCases(): void
+    {
+        $transitionList = Transition::createMultiple([Letter::A, Letter::B], Letter::C);
+
+        $this->assertCount(2, $transitionList);
+        $this->assertEquals('A', $transitionList[0]->getCurrentState()->getState());
+        $this->assertEquals('C', $transitionList[0]->getDesiredState()->getState());
+        $this->assertEquals('B', $transitionList[1]->getCurrentState()->getState());
+        $this->assertEquals('C', $transitionList[1]->getDesiredState()->getState());
     }
 }

@@ -1,0 +1,15 @@
+enum: 'Tests\Fixture\Article'
+
+transitions:
+  - from: DRAFT
+    to: REVIEW
+    condition: 'Tests\Fixture\HasReviewer'
+    action: 'Tests\Fixture\RecordingAction'
+
+  - from: REVIEW
+    to: PUBLISHED
+    action: 'Tests\Fixture\RecordingAction'
+
+  # The declarative form of Transition::createMultiple()
+  - from: [REVIEW, PUBLISHED]
+    to: ARCHIVED
