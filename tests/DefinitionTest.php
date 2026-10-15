@@ -41,6 +41,7 @@ class DefinitionTest extends TestCase
         ]);
 
         $transition = $stateMachine->getTransition(Article::Draft, Article::Review);
+        $this->assertSame($condition, $transition->getTransitionCondition());
         $this->assertSame($action, $transition->getTransitionAction());
 
         $this->assertFalse($stateMachine->canTransition(Article::Draft, Article::Review, []));

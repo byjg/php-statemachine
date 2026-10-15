@@ -213,8 +213,8 @@ reads as "the highest priority wins, and two moves tied at the top is a mistake"
 
 A selector receives the state being left, the data, and the transitions that accepted it. The
 last one is a **generator**, evaluated one element at a time: a selector that stops at the
-first element never causes the remaining conditions to run, which is why the default costs
-exactly one condition call. Drain it and you have paid for all of them.
+first element never causes the remaining conditions to run, which is why the default stops at
+the first match. Drain it and you have paid for all of them.
 
 ```php
 use ByJG\StateMachine\TransitionSelectorInterface;

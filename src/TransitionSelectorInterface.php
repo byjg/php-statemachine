@@ -21,9 +21,10 @@ interface TransitionSelectorInterface
     /**
      * Picks one transition out of those that accepted the data, or none.
      *
-     * `$matching` is evaluated lazily, in declaration order: the condition of the second
-     * transition does not run until the second element is asked for. A selector that only
-     * needs the first match therefore costs exactly one condition call, and one that needs
+     * `$matching` is evaluated lazily, in declaration order: conditions run only until the next
+     * transition that accepts the data, and the rest wait until another element is asked for.
+     * A selector that only needs the first match therefore stops there — the conditions
+     * declared after it never run — and one that needs
      * them all pays for what it uses. Conditions are required to be free of side effects, so
      * how many of them a selector chooses to run is a matter of cost, not of correctness.
      *

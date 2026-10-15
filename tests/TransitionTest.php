@@ -47,6 +47,26 @@ class TransitionTest extends TestCase
         $this->assertFalse($transition->runTransitionFunction(['key_sample'=>'1']));
     }
 
+    /**
+     * The guard is handed back as the very instance the transition was built with, so a caller
+     * can name it or ask it again; an unconditional move has none.
+     */
+    public function testTheConditionCanBeReadBack(): void
+    {
+        $condition = new class implements TransitionConditionInterface {
+            #[\Override]
+            public function canTransition(?array $data): bool {
+                return isset($data['key']);
+            }
+        };
+
+        $guarded = Transition::create(Letter::A, Letter::B, $condition);
+        $this->assertSame($condition, $guarded->getTransitionCondition());
+
+        $unconditional = Transition::create(Letter::A, Letter::B);
+        $this->assertNull($unconditional->getTransitionCondition());
+    }
+
     public function testMultipleTransition(): void
     {
         $state1 = new State('1');

@@ -72,7 +72,8 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   `Selector\HighestPriority`. They compose —
   `new HighestPriority(new RejectAmbiguous())` reads as "the highest priority wins, and an
   unranked tie is an error". The selector receives the matching transitions as a lazily
-  evaluated generator, so `FirstDeclared` still costs exactly one condition call, and it may
+  evaluated generator, so `FirstDeclared` still stops at the first match — the conditions
+  declared after it never run — and it may
   only return a transition it was offered: a selector chooses between legal moves and cannot
   produce a state reached through a condition that denied the data.
 - `Transition::withPriority(int)` / `getPriority()` — ranks a move against the others leaving the
@@ -80,6 +81,9 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   machine that declares no priority behaves exactly as before. Also a 6th slot in the
   `createMachine()` array form and a `priority` key in a definition, which is where it earns its
   keep: it stops the tie-break from being the order of entries in a YAML file.
+- `Transition::getTransitionCondition()` — the guard on a move, or `null` when it has none; the
+  counterpart of `getTransitionAction()`. Conditions are free of side effects, so a caller may ask
+  it again to explain why a move was refused.
 - A 4th optional argument for the transition action on `Transition::__construct()`,
   `Transition::create()` and `Transition::createMultiple()`.
 - A 4th slot in the `createMachine()` array form: `[$from, $to, $condition, $action]`.

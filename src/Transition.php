@@ -217,6 +217,19 @@ class Transition
     }
 
     /**
+     * The guard deciding whether this move may happen, or null when the move is unconditional.
+     *
+     * Handing it out is safe because conditions are required to be free of side effects: asking
+     * it again is how a caller explains a refusal — "RiskApproved said no" rather than "no move".
+     *
+     * @return TransitionConditionInterface|null
+     */
+    public function getTransitionCondition(): ?TransitionConditionInterface
+    {
+        return $this->transitionCondition;
+    }
+
+    /**
      * @return TransitionActionInterface|null
      */
     public function getTransitionAction(): ?TransitionActionInterface

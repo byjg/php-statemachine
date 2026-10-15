@@ -168,3 +168,17 @@ $transition = $stateMachine->getTransition(OrderState::Draft, OrderState::Paid, 
 
 Returns the `Transition` object if it exists, or `null` otherwise. Throws if the pair is joined by
 more than one move and no name was given — see [Naming a Transition](#naming-a-transition).
+
+A transition hands back what hangs on it: `getTransitionCondition()` and `getTransitionAction()`
+return the guard and the side effect, or `null` when there is none. Conditions are free of side
+effects, so asking the guard again is a safe way to explain a refusal:
+
+```php
+$transition = $stateMachine->getTransition(OrderState::Draft, OrderState::Review);
+
+if ($transition === null) {
+    $reason = "no arrow DRAFT -> REVIEW";
+} elseif (!$transition->runTransitionFunction($data)) {
+    $reason = get_class($transition->getTransitionCondition()) . " said no";
+}
+```
