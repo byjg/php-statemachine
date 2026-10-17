@@ -62,7 +62,7 @@ production.
 ## Supplying collaborators the machine cannot build
 
 `new $className()` only works for classes with no constructor argument. When a condition needs
-one, pass a resolver as the second argument of `createMachine()`:
+one, pass a resolver as the third argument of `createMachine()`:
 
 ```php
 $stateMachine = FiniteStateMachine::createMachine(
@@ -75,7 +75,7 @@ $stateMachine = FiniteStateMachine::createMachine(
 The resolver is a plain callable, so a PSR-11 container works directly:
 
 ```php
-$stateMachine = FiniteStateMachine::createMachine(StockState::class, $definition, [$container, 'get']);
+$stateMachine = FiniteStateMachine::createMachine(StockState::class, $transitions, [$container, 'get']);
 ```
 
 ## Loading the definition from a file

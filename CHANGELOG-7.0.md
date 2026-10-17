@@ -30,12 +30,14 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
 | **State constructor** | `new State($name, StateActionInterface $action)` | not called by you — a machine's states are the cases of its enum |
 | **Naming a state** | a `State` object | an enum case, the string it corresponds to, or a `State` the machine produced |
 | **Creating a machine** | `createMachine($transitions)` | `createMachine(OrderState::class, $transitions)` |
+| **Constructor** | `new FiniteStateMachine()` | `new FiniteStateMachine(OrderState::class)` |
 | **An unknown state** | answered as if it existed | `TransitionException` |
 | **`state()`** | `?State` — `null` when unknown | `State` — throws when the reference names no state |
 | **Action interface** | `StateActionInterface::execute(?array $data): void` | `TransitionActionInterface::execute(State $from, State $to, ?array $data): void` |
 | **Where actions are declared** | on the `State` | 4th argument of `Transition`, `Transition::create()` and `Transition::createMultiple()` |
 | **`$state->process()`** | ran the state's own action | runs the action of the transition the state was reached through |
 | **`State::arrivedThrough()`** | — | takes the `Transition`, not `(State, ?action)` |
+| **`State::setData()`** | `setData($data)` | `setData(?array $data)` |
 | **Standalone processing** | `$fsm->state('C')->process()` ran C's action | no-op — that state was not reached by a transition |
 
 ### Removed
@@ -76,6 +78,9 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   declared after it never run — and it may
   only return a transition it was offered: a selector chooses between legal moves and cannot
   produce a state reached through a condition that denied the data.
+- `FiniteStateMachine::throwErrorIfAmbiguousTransition()` — makes `autoTransitionFrom()` throw a
+  `TransitionException` when the data satisfies more than one transition, instead of taking the
+  first one declared. A shorthand for `selectWith(new RejectAmbiguous())`.
 - `Transition::withPriority(int)` / `getPriority()` — ranks a move against the others leaving the
   same state, read only by `Selector\HighestPriority`. Returns a copy; the default is 0, so a
   machine that declares no priority behaves exactly as before. Also a 6th slot in the
@@ -88,7 +93,7 @@ belongs to some other enum. `State` becomes what the machine hands back, not wha
   `Transition::create()` and `Transition::createMultiple()`.
 - A 4th slot in the `createMachine()` array form: `[$from, $to, $condition, $action]`.
 - The condition and the action slots also accept the **name of a class** implementing the
-  matching interface, resolved when the machine is built. A second optional argument of
+  matching interface, resolved when the machine is built. A third optional argument of
   `createMachine()` takes a resolver — any `callable(string): object`, so `[$container, 'get']`
   works — for collaborators that need constructor arguments.
 - `FiniteStateMachine::fromDefinition(array $definition, ?callable $resolver = null)` — builds a
