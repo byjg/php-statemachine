@@ -1,0 +1,10 @@
+# DRAFT -> PAID declared twice, one of them unnamed: nothing tells them apart
+enum: 'Tests\Fixture\Payment'
+
+transitions:
+  - name: PIX
+    from: DRAFT
+    to: PAID
+
+  - from: DRAFT
+    to: PAID
