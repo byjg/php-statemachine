@@ -5,8 +5,7 @@ tags: [php]
 
 # State Machine
 
-This component implements a Finite State Machine, which can define several states and group them in a collection
-of transitions (from one state to another state). In addition, each state can have a conditional allowing move to another state.
+A finite state machine for business workflows: states from an enum, transitions with conditions, and side effects that run only after you persist the move.
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/php-statemachine/actions/workflows/phpunit.yml)
@@ -17,6 +16,32 @@ of transitions (from one state to another state). In addition, each state can ha
 [![GitHub release](https://img.shields.io/github/release/byjg/php-statemachine.svg)](https://github.com/byjg/php-statemachine/releases/)
 
 Differently from other State machines, this implementation doesn't have an initial or final state.
+
+## Why
+
+An order, an article or a payment moves through states, and the rules end up as `if`
+statements spread across the code: which move is allowed, under which condition, and what
+must happen afterwards. Nobody can see the whole workflow, and a renamed state silently
+becomes one that nothing can reach.
+
+State Machine puts the workflow in one definition, in code or loaded from a file:
+
+```php
+$machine = FiniteStateMachine::fromDefinition([
+    'enum' => ArticleState::class,
+    'transitions' => [
+        ['from' => 'DRAFT',  'to' => 'REVIEW',    'condition' => HasReviewer::class],
+        ['from' => 'REVIEW', 'to' => 'PUBLISHED', 'action'    => Publish::class],
+    ],
+]);
+```
+
+- **The states are an enum.** A transition to a state that does not exist is rejected when
+  the definition is read, not discovered in production.
+- **Side effects after the commit.** A transition's action runs only when you call
+  `process()`, after you saved the new state, so an email or a payment never goes out for a
+  move that failed to persist.
+- **No forced start or end state**, and ready-made integration with Laravel and Symfony.
 
 ## Documentation
 
