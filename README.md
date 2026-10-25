@@ -1,5 +1,6 @@
 ---
 sidebar_key: statemachine
+sidebar_category: infrastructure
 tags: [php]
 ---
 
